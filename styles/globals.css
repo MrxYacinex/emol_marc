@@ -2,56 +2,266 @@
 
 :root {
   --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
+  --foreground: 0 0% 9%;
   --card: 0 0% 100%;
-  --card-foreground: 222.2 84% 4.9%;
+  --card-foreground: 0 0% 9%;
   --popover: 0 0% 100%;
-  --popover-foreground: 222.2 84% 4.9%;
+  --popover-foreground: 0 0% 9%;
   --primary: 221.2 83.2% 53.3%;
   --primary-foreground: 210 40% 98%;
   --secondary: 210 40% 96%;
-  --secondary-foreground: 222.2 84% 4.9%;
+  --secondary-foreground: 0 0% 9%;
   --muted: 210 40% 96%;
-  --muted-foreground: 215.4 16.3% 46.9%;
+  --muted-foreground: 0 0% 45%;
   --accent: 210 40% 96%;
-  --accent-foreground: 222.2 84% 4.9%;
+  --accent-foreground: 0 0% 9%;
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 210 40% 98%;
   --border: 214.3 31.8% 91.4%;
   --input: 214.3 31.8% 91.4%;
   --ring: 221.2 83.2% 53.3%;
-  --radius: 0.5rem;
+  --radius: 0.75rem;
 }
 
 .dark {
-  --background: 222.2 84% 4.9%;
+  --background: 0 0% 7.1%;
   --foreground: 210 40% 98%;
-  --card: 222.2 84% 4.9%;
+  --card: 0 0% 10.2%;
   --card-foreground: 210 40% 98%;
-  --popover: 222.2 84% 4.9%;
+  --popover: 0 0% 10.2%;
   --popover-foreground: 210 40% 98%;
   --primary: 210 40% 98%;
   --primary-foreground: 222.2 84% 4.9%;
-  --secondary: 217.2 32.6% 17.5%;
+  --secondary: 0 0% 14.9%;
   --secondary-foreground: 210 40% 98%;
-  --muted: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 65.1%;
-  --accent: 217.2 32.6% 17.5%;
+  --muted: 0 0% 14.9%;
+  --muted-foreground: 217.9 10.6% 64.9%;
+  --accent: 0 0% 14.9%;
   --accent-foreground: 210 40% 98%;
   --destructive: 0 62.8% 30.6%;
   --destructive-foreground: 210 40% 98%;
-  --border: 217.2 32.6% 17.5%;
-  --input: 217.2 32.6% 17.5%;
+  --border: 0 0% 14.9%;
+  --input: 0 0% 14.9%;
   --ring: 212.7 26.8% 83.9%;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-  }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  transition: background-color 0.2s ease, color 0.2s ease;
+  line-height: 1.5;
 }
 
-body {
-  font-family: Arial, Helvetica, sans-serif;
+/* Force light mode background to be white */
+body:not(.dark) {
+  background-color: #ffffff !important;
+  color: #171717 !important;
+}
+
+/* Force dark mode background */
+body.dark {
+  background-color: #121212 !important;
+  color: #ffffff !important;
+}
+
+/* Ensure text colors are correct in light mode */
+:not(.dark) .text-gray-900 {
+  color: #171717 !important;
+}
+
+:not(.dark) .text-gray-600 {
+  color: #525252 !important;
+}
+
+:not(.dark) .text-gray-500 {
+  color: #737373 !important;
+}
+
+:not(.dark) .text-gray-400 {
+  color: #a3a3a3 !important;
+}
+
+/* Ensure white text in dark mode */
+.dark .text-gray-900 {
+  color: #ffffff !important;
+}
+
+.dark .text-gray-600 {
+  color: #d1d5db !important;
+}
+
+.dark .text-gray-500 {
+  color: #9ca3af !important;
+}
+
+.dark .text-gray-400 {
+  color: #6b7280 !important;
+}
+
+.dark .text-white {
+  color: #ffffff !important;
+}
+
+/* Fix box borders for light mode */
+:not(.dark) .border-gray-200 {
+  border-color: #e5e7eb !important;
+}
+
+:not(.dark) .border-gray-300 {
+  border-color: #d1d5db !important;
+}
+
+:not(.dark) .border-gray-800 {
+  border-color: #374151 !important;
+}
+
+/* Fix box borders for dark mode */
+.dark .border-gray-200 {
+  border-color: #ffffff !important;
+}
+
+.dark .border-gray-300 {
+  border-color: #ffffff !important;
+}
+
+.dark .border-gray-600 {
+  border-color: #ffffff !important;
+}
+
+.dark .border-gray-800 {
+  border-color: #ffffff !important;
+}
+
+/* Fix button colors for light mode */
+:not(.dark) .bg-white {
+  background-color: #ffffff !important;
+  color: #171717 !important;
+}
+
+:not(.dark) .text-gray-700 {
+  color: #374151 !important;
+}
+
+/* Fix button colors for dark mode */
+.dark .bg-white {
+  background-color: #1a1a1a !important;
+  color: #ffffff !important;
+}
+
+.dark .text-gray-700 {
+  color: #ffffff !important;
+}
+
+.dark .text-gray-300 {
+  color: #ffffff !important;
+}
+
+/* Modern minimalistic adjustments */
+.dark .bg-gray-50 {
+  background-color: #1a1a1a !important;
+}
+
+.dark .bg-gray-100 {
+  background-color: #262626 !important;
+}
+
+.dark .bg-white {
+  background-color: #1a1a1a !important;
+}
+
+.dark .text-gray-900 {
+  color: rgb(248 250 252) !important;
+}
+
+.dark .text-gray-600 {
+  color: rgb(148 163 184) !important;
+}
+
+.dark .text-gray-500 {
+  color: rgb(100 116 139) !important;
+}
+
+.dark .border-gray-200 {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.dark .border-gray-300 {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Clean card styling */
+.dark .bg-blue-50 {
+  background-color: rgba(59, 130, 246, 0.1) !important;
+}
+
+.dark .text-blue-900 {
+  color: rgb(147 197 253) !important;
+}
+
+.dark .bg-green-100 {
+  background-color: rgba(34, 197, 94, 0.15) !important;
+}
+
+.dark .text-green-800 {
+  color: rgb(74 222 128) !important;
+}
+
+.dark .bg-yellow-50 {
+  background-color: rgba(251, 191, 36, 0.1) !important;
+}
+
+.dark .text-yellow-800 {
+  color: rgb(252 211 77) !important;
+}
+
+.dark .text-red-600 {
+  color: rgb(248 113 113) !important;
+}
+
+.dark .text-green-600 {
+  color: rgb(34 197 94) !important;
+}
+
+/* Card backgrounds */
+.card-bg {
+  background: #ffffff;
+}
+
+.dark .card-bg {
+  background: #1a1a1a;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Smooth button hover animations */
+.button-expand {
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.button-expand:hover {
+  transform: scale(1.02);
+}
+
+/* Enhanced text reveal animation */
+.text-reveal {
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Ensure smooth icon centering */
+.btn-icon-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  min-height: 40px;
+}
+
+.btn-icon-center .icon {
+  transition: margin-right 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.btn-icon-center:hover .icon {
+  margin-right: 8px;
 }
