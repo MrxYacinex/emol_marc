@@ -96,7 +96,7 @@ export default function StudyCompanion() {
     const imageDataURL = canvas.toDataURL('image/jpeg', 0.9)
 
     try {
-      const response = await fetch('http://localhost:5000/api/analyze', {
+      const response = await fetch('http://localhost:5000/api/analyze_frame', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -183,7 +183,7 @@ export default function StudyCompanion() {
     const imageDataURL = canvas.toDataURL('image/jpeg', 0.8)
 
     try {
-      const response = await fetch('http://localhost:5000/api/analyze', {
+      const response = await fetch('http://localhost:5000/api/analyze_frame', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -228,8 +228,10 @@ export default function StudyCompanion() {
       playing_with_hair?: boolean
     }
   }) => {
-    if (data.status === "tired" || data.handAnalysis?.hand_fatigue_detected) {
-      setCurrentSuggestion("You seem tired. Consider taking a break.")
+    if (data.status === "tired") {
+      setCurrentSuggestion("You seem tired. Consider taking a break chat.")
+    } else if (data.handAnalysis?.hand_fatigue_detected){
+      setCurrentSuggestion("Detected hand fatigue. Try to focus on the material or take a break.")
     } else if (data.attention === "abgelenkt") {
       setCurrentSuggestion("Your attention seems to be wandering. Try to refocus.")
     } else if (data.handAnalysis?.playing_with_hair) {

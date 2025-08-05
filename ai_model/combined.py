@@ -8,6 +8,8 @@ from flask_cors import CORS
 import os
 import time
 import math
+import traceback
+from flask import jsonify
 
 app = Flask(__name__)
 CORS(app)
@@ -91,11 +93,24 @@ def get_head_pose(shape, img_shape):
     )
 
     rotation_mat, _ = cv2.Rodrigues(rotation_vector)
-    pose_mat = cv2.hconcat((rotation_mat, translation_vector))
-    _, _, _, _, _, _, euler_angles = cv2.decomposeProjectionMatrix(pose_mat)
 
-    pitch, yaw, roll = euler_angles.flatten()
+    sy = np.sqrt(rotation_mat[0, 0] * rotation_mat[0, 0] + rotation_mat[1, 0] * rotation_mat[1, 0])
 
+    singular = sy < 1e-6
+
+    if not singular:
+        pitch = np.arctan2(-rotation_mat[2, 0], sy)
+        yaw = np.arctan2(rotation_mat[1, 0], rotation_mat[0, 0])
+        roll = np.arctan2(rotation_mat[2, 1], rotation_mat[2, 2])
+    else:
+        pitch = np.arctan2(-rotation_mat[2, 0], sy)
+        yaw = np.arctan2(-rotation_mat[0, 1], rotation_mat[1, 1])
+        roll = 0
+
+    pitch = np.rad2deg(pitch)
+    yaw = np.rad2deg(yaw)
+    roll = np.rad2deg(roll)
+    
     return pitch, yaw, roll
 
 def get_head_pose_mediapipe(landmarks, img_shape):
@@ -137,10 +152,24 @@ def get_head_pose_mediapipe(landmarks, img_shape):
     )
 
     rotation_mat, _ = cv2.Rodrigues(rotation_vector)
-    pose_mat = cv2.hconcat((rotation_mat, translation_vector))
-    _, _, _, _, _, _, euler_angles = cv2.decomposeProjectionMatrix(pose_mat)
+    
+    sy = np.sqrt(rotation_mat[0, 0] * rotation_mat[0, 0] + rotation_mat[1, 0] * rotation_mat[1, 0])
 
-    pitch, yaw, roll = euler_angles.flatten()
+    singular = sy < 1e-6
+
+    if not singular:
+        pitch = np.arctan2(-rotation_mat[2, 0], sy)
+        yaw = np.arctan2(rotation_mat[1, 0], rotation_mat[0, 0])
+        roll = np.arctan2(rotation_mat[2, 1], rotation_mat[2, 2])
+    else:
+        pitch = np.arctan2(-rotation_mat[2, 0], sy)
+        yaw = np.arctan2(-rotation_mat[0, 1], rotation_mat[1, 1])
+        roll = 0
+
+    pitch = np.rad2deg(pitch)
+    yaw = np.rad2deg(yaw)
+    roll = np.rad2deg(roll)
+
     return pitch, yaw, roll
 
 def get_landmarks_mediapipe(image):
@@ -237,13 +266,14 @@ def lernfaehigkeits_score(ear, left_gaze, right_gaze, pitch, yaw):
 
 # Hand gesture analysis from test_hand.py
 def distance_points(p1, p2):
-    return math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)
+    return math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)  #Normalize distance from screen)
 
 def analyze_hand_gestures(img):
     """Analyze hand gestures for fatigue detection"""
     global hand_close_start_time, prev_hand_pos, hand_positions
     
     if not MEDIAPIPE_AVAILABLE:
+        print("❌ MediaPipe not available - no hand/wrist data")
         # Simplified hand analysis based on timing and basic heuristics
         return {
             'hand_fatigue_detected': False,
@@ -253,18 +283,58 @@ def analyze_hand_gestures(img):
         }
 
     frame_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    # Process with face_mesh to get detailed facial landmarks
+    results_face = face_mesh.process(frame_rgb)
+    chin_pos = None
+    if results_face.multi_face_landmarks:
+        # The landmark for the bottom of the chin is at index 152
+        chin_landmark = results_face.multi_face_landmarks[0].landmark[152]
+        chin_pos = (chin_landmark.x, chin_landmark.y)
+        print("✓ Face landmarks detected - chin position found")
+
+        # Haar-Position (first estimate) landmarks 54 and 284 https://storage.googleapis.com/mediapipe-assets/documentation/mediapipe_face_landmark_fullsize.png
+        hair_right = results_face.multi_face_landmarks[0].landmark[54]
+        hair_left = results_face.multi_face_landmarks[0].landmark[284]
+        hair_offset = 0  # offset up to be adjusted
+        hair_right_pos = (hair_right.x, hair_right.y + hair_offset)
+        hair_left_pos = (hair_left.x, hair_left.y + hair_offset)
+    else:
+        print("❌ No face landmarks detected")
+
     results_pose = pose.process(frame_rgb)
     results_hands = hands.process(frame_rgb)
+
+    # Check if hands were detected
+    if results_hands.multi_hand_landmarks:
+        num_hands = len(results_hands.multi_hand_landmarks)
+        print(f"✓ Hand detection successful - {num_hands} hand(s) detected")
+        
+        # Check each hand for wrist data
+        for i, hand_landmarks in enumerate(results_hands.multi_hand_landmarks):
+            wrist = hand_landmarks.landmark[mp_hands.HandLandmark.WRIST]
+            wrist_pos = (wrist.x, wrist.y)
+            print(f"✓ Hand {i+1}: Wrist data found at position ({wrist.x:.3f}, {wrist.y:.3f})")
+    else:
+        print("❌ No hands detected - no wrist data available")
+
+    # Check if pose landmarks were detected
+    if results_pose.pose_landmarks:
+        print("✓ Pose landmarks detected")
+    else:
+        print("❌ No pose landmarks detected")
 
     fatigue_detected = False
     hand_at_head = False
     playing_with_hair = False
     hand_movement = "normal"
 
-    if results_pose.pose_landmarks and results_hands.multi_hand_landmarks:
+    # Ensure all landmarks (chin, pose, hands) were detected before proceeding
+    if chin_pos and results_pose.pose_landmarks and results_hands.multi_hand_landmarks:
+        print("✓ All required landmarks detected - proceeding with analysis")
         pose_landmarks = results_pose.pose_landmarks.landmark
 
-        # Kopf-Merkmale: Nase und Mundmitte
+        # Kopf-Merkmale: Nase und Mundmitte from Pose model
         nose = pose_landmarks[mp_pose.PoseLandmark.NOSE]
         mouth_left = pose_landmarks[mp_pose.PoseLandmark.MOUTH_LEFT]
         mouth_right = pose_landmarks[mp_pose.PoseLandmark.MOUTH_RIGHT]
@@ -274,7 +344,7 @@ def analyze_hand_gestures(img):
         mouth_pos = (mouth_center_x, mouth_center_y)
         nose_pos = (nose.x, nose.y)
 
-        for hand_landmarks in results_hands.multi_hand_landmarks:
+        for i, hand_landmarks in enumerate(results_hands.multi_hand_landmarks):
             # Finger-Tipps + Handgelenk prüfen
             finger_tips_ids = [
                 mp_hands.HandLandmark.THUMB_TIP,
@@ -283,47 +353,87 @@ def analyze_hand_gestures(img):
                 mp_hands.HandLandmark.RING_FINGER_TIP,
                 mp_hands.HandLandmark.PINKY_TIP
             ]
+            finger_tips = [
+                (hand_landmarks.landmark[i].x, hand_landmarks.landmark[i].y) for i in finger_tips_ids
+            ]
 
-            hand_center_x = sum([hand_landmarks.landmark[tip].x for tip in finger_tips_ids]) / len(finger_tips_ids)
-            hand_center_y = sum([hand_landmarks.landmark[tip].y for tip in finger_tips_ids]) / len(finger_tips_ids)
-            hand_pos = (hand_center_x, hand_center_y)
+            #wrist
+            wrist = hand_landmarks.landmark[mp_hands.HandLandmark.WRIST]
+            wrist_pos = (wrist.x, wrist.y)
+            print(f"✓ Processing Hand {i+1}: Using wrist at ({wrist.x:.3f}, {wrist.y:.3f})")
 
-            # Hand positions für Bewegungstracking
-            hand_positions.append(hand_pos)
-            if len(hand_positions) > 10:  # nur die letzten 10 Positionen behalten
-                hand_positions.pop(0)
+            #pinky_finger_mcp_point
+            pinky_mcp = hand_landmarks.landmark[mp_hands.HandLandmark.PINKY_MCP]
+            pinky_mcp_pos = (pinky_mcp.x, pinky_mcp.y)
 
-            # Bewegungsanalyse
-            if len(hand_positions) >= 2:
-                movement = sum([distance_points(hand_positions[i], hand_positions[i+1]) 
-                              for i in range(len(hand_positions)-1)]) / (len(hand_positions)-1)
-                hand_movement = "still" if movement < MOVEMENT_THRESHOLD else "normal"
+            #palm
+            palm_outside_x = (wrist.x + pinky_mcp.x) / 2
+            palm_outside_y = (wrist.y + pinky_mcp.y) / 2
+            palm_pos = (palm_outside_x, palm_outside_y)
+            print(f"✓ Hand {i+1}: Palm position calculated at ({palm_outside_x:.3f}, {palm_outside_y:.3f})")
 
-            # Hand in der Nähe des Kopfes
-            head_to_hand_distance = min(
-                distance_points(nose_pos, hand_pos),
-                distance_points(mouth_pos, hand_pos)
-            )
+            # Müdigkeit, wenn die Hand nahe am Kopf ist #vorher wrist_pos, nose_pos, now
+            distance_hand_head = distance_points(palm_pos, chin_pos)
+            print(f"✓ Hand {i+1}: Distance from palm to chin: {distance_hand_head:.3f}")
 
-            if head_to_hand_distance < 0.15:  # Threshold für "Hand am Kopf"
-                hand_at_head = True
+            if distance_hand_head < 0.2:
+                print(f"⚠️ Hand {i+1}: Close to head detected (distance: {distance_hand_head:.3f})")
                 if hand_close_start_time is None:
                     hand_close_start_time = time.time()
-                elif time.time() - hand_close_start_time > FATIGUE_TIME_THRESHOLD:
-                    fatigue_detected = True
+                    print(f"⏱️ Hand {i+1}: Started timer for fatigue detection")
+                else:
+                    elapsed_time = time.time() - hand_close_start_time
+                    print(f"⏱️ Hand {i+1}: Hand close for {elapsed_time:.1f} seconds")
+                    if elapsed_time > FATIGUE_TIME_THRESHOLD:
+                        fatigue_detected = True
+                        print(f"😴 Hand {i+1}: FATIGUE DETECTED! Hand close for {elapsed_time:.1f} seconds")
             else:
+                if hand_close_start_time is not None:
+                    print(f"✓ Hand {i+1}: Hand moved away from head - resetting timer")
                 hand_close_start_time = None
 
-            # Haar spielen erkennen (Hand sehr nah am oberen Kopfbereich)
-            if hand_center_y < nose.y and head_to_hand_distance < 0.12:
-                playing_with_hair = True
+            # Spielen mit den Haaren, wenn die Finger in der Nähe des Kopfes sind
+            for tip_idx, tip in enumerate(finger_tips):
+                distance_finger_head = min(distance_points(tip, hair_right_pos), distance_points(tip, hair_left_pos)) #before tip, nose_pos now tip, hair_right or hair_left
+                if distance_finger_head < 0.15:
+                    playing_with_hair = True
+                    print(f"💇 Hand {i+1}: PLAYING WITH HAIR detected! Finger {tip_idx+1} distance: {distance_finger_head:.3f}")
+                    break
 
-    return {
+            # Bewegung der Hand messen
+            current_hand_pos = (wrist.x, wrist.y)
+            hand_positions.append(current_hand_pos)
+
+            if prev_hand_pos is not None:
+                movement = distance_points(current_hand_pos, prev_hand_pos)
+                print(f"✓ Hand {i+1}: Movement detected: {movement:.4f}")
+                if movement < MOVEMENT_THRESHOLD:
+                    hand_movement = "ruhig"
+                    print(f"😌 Hand {i+1}: Hand movement is calm")
+                else:
+                    hand_movement = "normal"
+                    print(f"👋 Hand {i+1}: Hand movement is normal")
+            else:
+                print(f"✓ Hand {i+1}: First frame - no previous position to compare")
+            prev_hand_pos = current_hand_pos
+    else:
+        print("❌ Missing required landmarks - skipping detailed analysis")
+        if not chin_pos:
+            print("  - Missing chin position")
+        if not results_pose.pose_landmarks:
+            print("  - Missing pose landmarks")
+        if not results_hands.multi_hand_landmarks:
+            print("  - Missing hand landmarks")
+
+    analysis_results = {
         'hand_fatigue_detected': fatigue_detected,
-        'hand_at_head': hand_at_head,
+        'hand_at_head': hand_at_head,  # not implemented
         'playing_with_hair': playing_with_hair,
         'hand_movement': hand_movement
     }
+    print("🔍 Hand Gesture Analysis Results:", analysis_results)
+    return analysis_results
+
 
 def resize_image_keep_aspect(img, max_side=640):
     h, w = img.shape[:2]
@@ -333,52 +443,55 @@ def resize_image_keep_aspect(img, max_side=640):
         return cv2.resize(img, (new_w, new_h))
     return img
 
-@app.route("/api/analyze", methods=["POST"])
-def analyze():
-    """
-    Unified analysis endpoint that combines all features:
-    - Face detection (dlib + MediaPipe)
-    - Eye tracking and fatigue detection
-    - Gaze direction analysis
-    - Head pose estimation
-    - Hand gesture analysis
-    - Learning capability scoring
-    """
+@app.route('/api/analyze_frame', methods=['POST'])
+def analyze_frame_route():
+    """Process a single frame"""
     data = request.get_json()
     if not data or "image" not in data:
-        return jsonify({"status": "kein Bild"}), 400
+        return jsonify({"error": "No image provided"}), 400
 
-    image_b64 = data.get("image")
+    image_b64 = data["image"]
     img = decode_image(image_b64)
     if img is None:
-        return jsonify({"status": "Bild dekodieren fehlgeschlagen"}), 400
+        return jsonify({"error": "Decoding failed"}), 400
+    
+    result = analyze_frame(img)
+    return jsonify(result)
 
-    img = resize_image_keep_aspect(img, 640)
+# In your combined.py file, find the analyze_frame function.
+# You need to change its definition to accept the 'frame' argument.
+
+def analyze_frame(frame):
+    # The rest of your existing code inside this function remains unchanged.
+    # It should use the 'frame' variable that is now passed as an argument.
+    img = frame
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # Try dlib first
-    rects = hog_detector(gray, 1) if hog_detector else []
+    # Face detection using dlib
+    rects = hog_detector(gray, 0) if hog_detector else []
+    shape = None
+    if rects:
+        shape = predictor(gray, rects[0]) if predictor else None
+        shape = face_utils.shape_to_np(shape) if shape else None
 
-    if len(rects) > 0:
-        rect = rects[0]
-        shape = predictor(gray, rect)
-        shape = face_utils.shape_to_np(shape)
-        method_used = "dlib"
-        faces_detected = len(rects)
-    else:
-        # Fallback to MediaPipe
+    # Fallback to MediaPipe face mesh if dlib fails
+    if shape is None and MEDIAPIPE_AVAILABLE:
         shape = get_landmarks_mediapipe(img)
-        method_used = "mediapipe"
-        faces_detected = 1 if shape is not None else 0
-        if shape is None:
-            return jsonify({"status": "kein Gesicht erkannt"})
+    
+    if shape is None:
+        return {
+            "status": "kein Gesicht erkannt",
+            "lernfaehigkeitsAnalyse": {
+                "score": 0,
+                "feedback": ["Kein Gesicht im Bild erkannt, Analyse nicht möglich."]
+            }
+        }
 
-    # Eye analysis
-    if method_used == "dlib":
+    # Eye aspect ratio
+    if len(shape) == 68:
         leftEye = shape[36:42]
         rightEye = shape[42:48]
     else:
-        # MediaPipe: Augenindizes approximieren
         leftEye_indices = [33, 160, 158, 133, 153, 144]
         rightEye_indices = [263, 387, 385, 362, 380, 373]
         leftEye = np.array([shape[i] for i in leftEye_indices])
@@ -387,98 +500,130 @@ def analyze():
     leftEAR = eye_aspect_ratio(leftEye)
     rightEAR = eye_aspect_ratio(rightEye)
     ear = (leftEAR + rightEAR) / 2.0
-    ear_percent = round(ear * 100, 1)
-
-    status_fatigue = "tired" if ear < 0.25 else "awake"
 
     # Gaze direction
     left_gaze = gaze_direction(leftEye, gray)
     right_gaze = gaze_direction(rightEye, gray)
 
-    # Head pose
-    if method_used == "dlib":
+    # Head pose estimation
+    if len(shape) == 68:
         pitch, yaw, roll = get_head_pose(shape, img.shape)
     else:
         pitch, yaw, roll = get_head_pose_mediapipe(shape, img.shape)
 
-    # Attention analysis
-    attention_head_pose = "aufmerksam"
-    if abs(yaw) > 20 or abs(pitch) > 15:
-        attention_head_pose = "abgelenkt"
-
-    attention_count = 0
-    if ear >= 0.25:
-        attention_count += 1
-    if left_gaze == "center" and right_gaze == "center":
-        attention_count += 1
-    if attention_head_pose == "aufmerksam":
-        attention_count += 1
-
-    attention_status = "aufmerksam" if attention_count >= 2 else "abgelenkt"
-
-    # Learning capability score
-    lernfaehigkeits_score_value = lernfaehigkeits_score(ear, left_gaze, right_gaze, pitch, yaw)
-
-    # Hand gesture analysis
     hand_analysis = analyze_hand_gestures(img)
+    
+    # Learning capability score
+    lernfaehigkeit = lernfaehigkeits_score(ear, left_gaze, right_gaze, pitch, yaw)
 
-    print(f"Method: {method_used}")
-    print(f"EAR: {ear_percent}")
-    print(f"Gaze Left: {left_gaze}")
-    print(f"Gaze Right: {right_gaze}")
-    print(f"Pitch: {pitch:.2f}")
-    print(f"Yaw: {yaw:.2f}")
-    print(f"Attention count: {attention_count}")
-    print(f"Status: {attention_status}")
-    print(f"Lernfähigkeits-Score: {lernfaehigkeits_score_value}")
-    print(f"Hand Analysis: {hand_analysis}")
-
-    response_data = {
-        "methodUsed": method_used,
-        "status": status_fatigue,
-        "avgEAR": ear_percent,
-        "facesDetected": faces_detected,
-        "gazeLeft": left_gaze,
-        "gazeRight": right_gaze,
-        "headPose": {
-            "pitch": pitch,
-            "yaw": yaw,
-            "roll": roll
-        },
-        "attention": attention_status,
-        "lernfaehigkeitsScore": lernfaehigkeits_score_value,
-        "handAnalysis": hand_analysis
+    return {
+        "ear": ear,
+        "left_gaze": left_gaze,
+        "right_gaze": right_gaze,
+        "pitch": pitch,
+        "yaw": yaw,
+        "roll": roll,
+        "hand_analysis": hand_analysis,
+        "lernfaehigkeit": lernfaehigkeit
     }
-    
-    print(f"🔄 Sending response: {response_data}")
-    return jsonify(response_data)
 
-@app.route("/api/health", methods=["GET"])
-def health():
-    """Health check endpoint"""
-    capabilities = [
-        "Müdigkeitserkennung (EAR + Hand am Kopf)",
-        "Aufmerksamkeits-Tracking",
-        "Lernfähigkeits-Score",
-        "Hand-Gesten Analyse",
-        "Blickrichtungs-Erkennung",
-        "Kopfpose Estimation"
-    ]
-    
-    if MEDIAPIPE_AVAILABLE:
-        capabilities.append("MediaPipe Hand Tracking")
-        capabilities.append("MediaPipe Face Mesh")
-    
-    return jsonify({
-        "status": "healthy",
-        "capabilities": capabilities,
-        "mediapipe_available": MEDIAPIPE_AVAILABLE,
-        "dlib_available": hog_detector is not None
-    })
+# Make sure you have 'app' or your actual Flask app instance defined.
+# If your Flask app instance is named 'combined', use @combined.route(...) instead.
+@app.route("/api/analyze", methods=["POST"])
+def check_fatigue():
+    try:
+        data = request.get_json()
+        if not data or "image" not in data:
+            return jsonify({"status": "kein Bild"}), 400
 
-if __name__ == "__main__":
-    print("🚀 Starting Unified AI Learning Analytics API...")
-    print("📊 Features: Müdigkeitserkennung, Hand-Tracking, Lernfähigkeits-Score, Gaze-Detection")
-    print(f"📱 MediaPipe: {'✓ Verfügbar' if MEDIAPIPE_AVAILABLE else '✗ Nicht verfügbar'}")
-    print(f"🔍 Dlib: {'✓ Verfügbar' if hog_detector else '✗ Nicht verfügbar'}")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+        image_b64 = data.get("image")
+        img = decode_image(image_b64)
+        if img is None:
+            return jsonify({"status": "Bild dekodieren fehlgeschlagen"}), 400
+
+        img = resize_image_keep_aspect(img, 640)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        rects = hog_detector(gray, 1)
+
+        if len(rects) > 0:
+            rect = rects[0]
+            shape = predictor(gray, rect)
+            shape = face_utils.shape_to_np(shape)
+            method_used = "dlib"
+        else:
+            # Kein Gesicht mit dlib, MediaPipe versuchen
+            shape = get_landmarks_mediapipe(img)
+            method_used = "mediapipe"
+            if shape is None:
+                return jsonify({"status": "kein Gesicht erkannt"})
+
+        # Falls MediaPipe: keine 68 Punkte wie dlib, sondern 468. Für Augen + Head Pose nehmen wir Schlüsselindizes (Anpassung nötig)
+
+        if method_used == "dlib":
+            leftEye = shape[36:42]
+            rightEye = shape[42:48]
+        else:
+            # MediaPipe: Augenindizes grob approximieren
+            leftEye_indices = [33, 160, 158, 133, 153, 144]  # Beispiel für linkes Auge
+            rightEye_indices = [263, 387, 385, 362, 380, 373]  # Beispiel für rechtes Auge
+            leftEye = np.array([shape[i] for i in leftEye_indices])
+            rightEye = np.array([shape[i] for i in rightEye_indices])
+
+        leftEAR = eye_aspect_ratio(leftEye)
+        rightEAR = eye_aspect_ratio(rightEye)
+        ear = (leftEAR + rightEAR) / 2.0
+        ear_percent = round(ear * 100, 1)
+
+        status_fatigue = "tired" if ear < 0.25 else "awake"
+
+        left_gaze = gaze_direction(leftEye, gray)
+        right_gaze = gaze_direction(rightEye, gray)
+
+        # Head pose nur bei dlib möglich, bei MediaPipe hier eine Dummy-Ausgabe (kann man später mit mp.solutions.face_mesh erweitern)
+        if method_used == "dlib":
+            pitch, yaw, roll = get_head_pose(shape, img.shape)
+        else:
+            pitch, yaw, roll = get_head_pose_mediapipe(shape, img.shape)
+
+        attention_head_pose = "aufmerksam"
+        if abs(yaw) > 20 or abs(pitch) > 15:
+            attention_head_pose = "abgelenkt"
+
+        attention_count = 0
+        if ear >= 0.25:
+            attention_count += 1
+        if left_gaze == "center" and right_gaze == "center":
+            attention_count += 1
+        if attention_head_pose == "aufmerksam":
+            attention_count += 1
+
+        attention_status = "aufmerksam" if attention_count >= 2 else "abgelenkt"
+
+        lernfaehigkeits_score_value = lernfaehigkeits_score(ear, left_gaze, right_gaze, pitch, yaw)
+
+        print(f"Method: {method_used}, EAR: {ear_percent}, Gaze: {left_gaze}/{right_gaze}, Pitch: {pitch:.2f}, Yaw: {yaw:.2f}")
+        print(f"Attention count: {attention_count}, Status: {attention_status}, Lernfähigkeits-Score: {lernfaehigkeits_score_value}")
+
+        return jsonify({
+            "methodUsed": method_used,
+            "status": status_fatigue,
+            "avg EAR": ear_percent,
+            "facesDetected": len(rects),
+            "gazeLeft": left_gaze,
+            "gazeRight": right_gaze,
+            "headPose": {
+                "pitch": pitch,
+                "yaw": yaw,
+                "roll": roll
+            },
+            "attention": attention_status,
+            "lernfaehigkeitsScore": lernfaehigkeits_score_value
+        })
+    except Exception as e:
+        print(f"An exception occurred in check_fatigue: {e}")
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0')
