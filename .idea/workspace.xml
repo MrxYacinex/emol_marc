@@ -5,7 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="26642eca-c0dd-4ff4-8e97-d59ea9cc7200" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/ai_model/combined.py" beforeDir="false" afterPath="$PROJECT_DIR$/ai_model/combined.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <list id="564cc30b-52b0-4847-8321-be0b12a11702" name="Changes by yacine" comment="" />
     <option name="SHOW_DIALOG" value="false" />
@@ -182,7 +182,7 @@
       <workItem from="1754346773249" duration="13409000" />
       <workItem from="1754416301474" duration="5916000" />
       <workItem from="1754471849813" duration="8019000" />
-      <workItem from="1754480184016" duration="6761000" />
+      <workItem from="1754480184016" duration="7772000" />
     </task>
     <servers />
   </component>
