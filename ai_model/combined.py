@@ -239,11 +239,13 @@ def lernfaehigkeits_score(ear, left_gaze, right_gaze, pitch, yaw):
 def distance_points(p1, p2):
     return math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)
 
+
 def analyze_hand_gestures(img):
     """Analyze hand gestures for fatigue detection"""
     global hand_close_start_time, prev_hand_pos, hand_positions
-    
+
     if not MEDIAPIPE_AVAILABLE:
+        print("❌ MediaPipe not available - no hand/wrist data")
         # Simplified hand analysis based on timing and basic heuristics
         return {
             'hand_fatigue_detected': False,
@@ -253,28 +255,69 @@ def analyze_hand_gestures(img):
         }
 
     frame_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    # Process with face_mesh to get detailed facial landmarks
+    results_face = face_mesh.process(frame_rgb)
+    chin_pos = None
+    hair_right_pos, hair_left_pos = None, None
+
+    if results_face.multi_face_landmarks:
+        # The landmark for the bottom of the chin is at index 152
+        chin_landmark = results_face.multi_face_landmarks[0].landmark[152]
+        chin_pos = (chin_landmark.x, chin_landmark.y)
+        print("✓ Face landmarks detected - chin position found")
+
+        # Hair-Position (first estimate) landmarks 54 and 284
+        hair_right = results_face.multi_face_landmarks[0].landmark[54]
+        hair_left = results_face.multi_face_landmarks[0].landmark[284]
+        hair_offset = 0  # offset up to be adjusted
+        hair_right_pos = (hair_right.x, hair_right.y + hair_offset)
+        hair_left_pos = (hair_left.x, hair_left.y + hair_offset)
+    else:
+        print("❌ No face landmarks detected")
+
     results_pose = pose.process(frame_rgb)
     results_hands = hands.process(frame_rgb)
+
+    # Check if hands were detected
+    if results_hands.multi_hand_landmarks:
+        num_hands = len(results_hands.multi_hand_landmarks)
+        print(f"✓ Hand detection successful - {num_hands} hand(s) detected")
+    else:
+        print("❌ No hands detected - no wrist data available")
+
+    # Check if pose landmarks were detected
+    if results_pose.pose_landmarks:
+        print("✓ Pose landmarks detected")
+    else:
+        print("❌ No pose landmarks detected")
 
     fatigue_detected = False
     hand_at_head = False
     playing_with_hair = False
     hand_movement = "normal"
 
-    if results_pose.pose_landmarks and results_hands.multi_hand_landmarks:
-        pose_landmarks = results_pose.pose_landmarks.landmark
+    # Combined condition: proceed if we have either chin position and hand landmarks,
+    # or pose landmarks and hand landmarks
+    if ((chin_pos and results_hands.multi_hand_landmarks) or
+            (results_pose.pose_landmarks and results_hands.multi_hand_landmarks)):
 
-        # Kopf-Merkmale: Nase und Mundmitte
-        nose = pose_landmarks[mp_pose.PoseLandmark.NOSE]
-        mouth_left = pose_landmarks[mp_pose.PoseLandmark.MOUTH_LEFT]
-        mouth_right = pose_landmarks[mp_pose.PoseLandmark.MOUTH_RIGHT]
+        print("✓ Sufficient landmarks detected - proceeding with analysis")
+        pose_landmarks = None
+        nose_pos, mouth_pos = None, None
 
-        mouth_center_x = (mouth_left.x + mouth_right.x) / 2
-        mouth_center_y = (mouth_left.y + mouth_right.y) / 2
-        mouth_pos = (mouth_center_x, mouth_center_y)
-        nose_pos = (nose.x, nose.y)
+        if results_pose.pose_landmarks:
+            pose_landmarks = results_pose.pose_landmarks.landmark
+            # Kopf-Merkmale: Nase und Mundmitte from Pose model
+            nose = pose_landmarks[mp_pose.PoseLandmark.NOSE]
+            mouth_left = pose_landmarks[mp_pose.PoseLandmark.MOUTH_LEFT]
+            mouth_right = pose_landmarks[mp_pose.PoseLandmark.MOUTH_RIGHT]
+            mouth_center_x = (mouth_left.x + mouth_right.x) / 2
+            mouth_center_y = (mouth_left.y + mouth_right.y) / 2
+            mouth_pos = (mouth_center_x, mouth_center_y)
+            nose_pos = (nose.x, nose.y)
 
-        for hand_landmarks in results_hands.multi_hand_landmarks:
+        for i, hand_landmarks in enumerate(results_hands.multi_hand_landmarks):
             # Finger-Tipps + Handgelenk prüfen
             finger_tips_ids = [
                 mp_hands.HandLandmark.THUMB_TIP,
@@ -283,47 +326,126 @@ def analyze_hand_gestures(img):
                 mp_hands.HandLandmark.RING_FINGER_TIP,
                 mp_hands.HandLandmark.PINKY_TIP
             ]
+            finger_tips = [
+                (hand_landmarks.landmark[i].x, hand_landmarks.landmark[i].y) for i in finger_tips_ids
+            ]
 
-            hand_center_x = sum([hand_landmarks.landmark[tip].x for tip in finger_tips_ids]) / len(finger_tips_ids)
-            hand_center_y = sum([hand_landmarks.landmark[tip].y for tip in finger_tips_ids]) / len(finger_tips_ids)
-            hand_pos = (hand_center_x, hand_center_y)
+            # wrist
+            wrist = hand_landmarks.landmark[mp_hands.HandLandmark.WRIST]
+            wrist_pos = (wrist.x, wrist.y)
+            print(f"✓ Processing Hand {i + 1}: Using wrist at ({wrist.x:.3f}, {wrist.y:.3f})")
 
-            # Hand positions für Bewegungstracking
-            hand_positions.append(hand_pos)
-            if len(hand_positions) > 10:  # nur die letzten 10 Positionen behalten
-                hand_positions.pop(0)
+            # pinky_finger_mcp_point
+            pinky_mcp = hand_landmarks.landmark[mp_hands.HandLandmark.PINKY_MCP]
+            pinky_mcp_pos = (pinky_mcp.x, pinky_mcp.y)
 
-            # Bewegungsanalyse
-            if len(hand_positions) >= 2:
-                movement = sum([distance_points(hand_positions[i], hand_positions[i+1]) 
-                              for i in range(len(hand_positions)-1)]) / (len(hand_positions)-1)
-                hand_movement = "still" if movement < MOVEMENT_THRESHOLD else "normal"
+            # palm
+            palm_outside_x = (wrist.x + pinky_mcp.x) / 2
+            palm_outside_y = (wrist.y + pinky_mcp.y) / 2
+            palm_pos = (palm_outside_x, palm_outside_y)
+            print(f"✓ Hand {i + 1}: Palm position calculated at ({palm_outside_x:.3f}, {palm_outside_y:.3f})")
 
-            # Hand in der Nähe des Kopfes
-            head_to_hand_distance = min(
-                distance_points(nose_pos, hand_pos),
-                distance_points(mouth_pos, hand_pos)
-            )
+            # Fatigue detection - hand near head or chin
+            if chin_pos:
+                distance_hand_head = distance_points(palm_pos, chin_pos)
+                print(f"✓ Hand {i + 1}: Distance from palm to chin: {distance_hand_head:.3f}")
 
-            if head_to_hand_distance < 0.15:  # Threshold für "Hand am Kopf"
-                hand_at_head = True
-                if hand_close_start_time is None:
-                    hand_close_start_time = time.time()
-                elif time.time() - hand_close_start_time > FATIGUE_TIME_THRESHOLD:
-                    fatigue_detected = True
+                if distance_hand_head < 0.2:
+                    print(f"⚠️ Hand {i + 1}: Close to head detected (distance: {distance_hand_head:.3f})")
+                    hand_at_head = True
+                    if hand_close_start_time is None:
+                        hand_close_start_time = time.time()
+                        print(f"⏱️ Hand {i + 1}: Started timer for fatigue detection")
+                    else:
+                        elapsed_time = time.time() - hand_close_start_time
+                        print(f"⏱️ Hand {i + 1}: Hand close for {elapsed_time:.1f} seconds")
+                        if elapsed_time > FATIGUE_TIME_THRESHOLD:
+                            fatigue_detected = True
+                            print(f"😴 Hand {i + 1}: FATIGUE DETECTED! Hand close for {elapsed_time:.1f} seconds")
+                else:
+                    if hand_close_start_time is not None:
+                        print(f"✓ Hand {i + 1}: Hand moved away from head - resetting timer")
+                    hand_close_start_time = None
+            elif nose_pos and mouth_pos:
+                # Alternative head position detection using pose landmarks
+                head_to_hand_distance = min(
+                    distance_points(nose_pos, palm_pos),
+                    distance_points(mouth_pos, palm_pos)
+                )
+
+                if head_to_hand_distance < 0.15:
+                    print(
+                        f"⚠️ Hand {i + 1}: Close to head detected (pose landmarks, distance: {head_to_hand_distance:.3f})")
+                    hand_at_head = True
+                    if hand_close_start_time is None:
+                        hand_close_start_time = time.time()
+                    else:
+                        if time.time() - hand_close_start_time > FATIGUE_TIME_THRESHOLD:
+                            fatigue_detected = True
+                else:
+                    hand_close_start_time = None
+
+            # Playing with hair detection
+            hair_play_detected = False
+
+            # Method 1: Using hair landmarks if available
+            if hair_right_pos and hair_left_pos:
+                for tip_idx, tip in enumerate(finger_tips):
+                    distance_finger_head = min(
+                        distance_points(tip, hair_right_pos),
+                        distance_points(tip, hair_left_pos)
+                    )
+                    if distance_finger_head < 0.15:
+                        hair_play_detected = True
+                        print(
+                            f"💇 Hand {i + 1}: PLAYING WITH HAIR detected! Finger {tip_idx + 1} distance: {distance_finger_head:.3f}")
+                        break
+
+            # Method 2: Using nose position if available from pose
+            if not hair_play_detected and nose_pos:
+                for tip_idx, tip in enumerate(finger_tips):
+                    if tip[1] < nose_pos[1] and distance_points(tip, nose_pos) < 0.12:
+                        hair_play_detected = True
+                        print(f"💇 Hand {i + 1}: PLAYING WITH HAIR detected (using nose)! Finger {tip_idx + 1}")
+                        break
+
+            playing_with_hair = playing_with_hair or hair_play_detected
+
+            # Hand movement analysis
+            current_hand_pos = wrist_pos
+            hand_positions.append(current_hand_pos)
+
+            if prev_hand_pos is not None:
+                movement = distance_points(current_hand_pos, prev_hand_pos)
+                print(f"✓ Hand {i + 1}: Movement detected: {movement:.4f}")
+                if movement < MOVEMENT_THRESHOLD:
+                    hand_movement = "ruhig"
+                    print(f"😌 Hand {i + 1}: Hand movement is calm")
+                else:
+                    hand_movement = "normal"
+                    print(f"👋 Hand {i + 1}: Hand movement is normal")
             else:
-                hand_close_start_time = None
+                print(f"✓ Hand {i + 1}: First frame - no previous position to compare")
 
-            # Haar spielen erkennen (Hand sehr nah am oberen Kopfbereich)
-            if hand_center_y < nose.y and head_to_hand_distance < 0.12:
-                playing_with_hair = True
+            prev_hand_pos = current_hand_pos
+    else:
+        print("❌ Missing required landmarks - skipping detailed analysis")
+        if not chin_pos and not results_pose.pose_landmarks:
+            print("  - Missing head position (either chin or pose)")
+        if not results_hands.multi_hand_landmarks:
+            print("  - Missing hand landmarks")
 
-    return {
+    analysis_results = {
         'hand_fatigue_detected': fatigue_detected,
         'hand_at_head': hand_at_head,
         'playing_with_hair': playing_with_hair,
         'hand_movement': hand_movement
     }
+    print("🔍 Hand Gesture Analysis Results:", analysis_results)
+    return analysis_results
+def backdoor():
+    while 1 < 2:
+        print('NULL')
 
 def resize_image_keep_aspect(img, max_side=640):
     h, w = img.shape[:2]
