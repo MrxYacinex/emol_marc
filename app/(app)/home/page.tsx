@@ -396,40 +396,18 @@ export default function StudyCompanion() {
               <div className="space-y-2">
                 <div className="flex items-center gap-3">
                   <div className="relative">
-                    <div className="w-12 h-12 bg-gradient-to-br from-[#f4895c] to-[#f4a072] rounded-2xl flex items-center justify-center shadow-lg animate-bounce">
+                    <div className="w-12 h-12 bg-gradient-to-br from-[#f4895c] to-[#f4a072] rounded-2xl flex items-center justify-center shadow-lg">
                       <Brain className="h-6 w-6 text-white" />
                     </div>
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full animate-ping" />
                   </div>
                   <div>
                     <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent animate-in slide-in-from-left-6 duration-1000 delay-300">
-                      Study Companion
-                    </h1>
-                    <p className="text-gray-600 dark:text-gray-400 animate-in slide-in-from-left-4 duration-1000 delay-500">
-                      AI-powered focus enhancement • Level up your learning
-                    </p>
+                      EMOL
+                    </h1>                  
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                {/* Quick Stats */}
-                <div className="flex items-center gap-4 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-2xl p-4 border border-gray-200/30 dark:border-gray-700/30">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-[#f4895c]">7</div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">Streak</div>
-                  </div>
-                  <div className="w-px h-8 bg-gray-300 dark:bg-gray-600" />
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">85%</div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">Focus</div>
-                  </div>
-                  <div className="w-px h-8 bg-gray-300 dark:bg-gray-600" />
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600">12h</div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">Today</div>
-                  </div>
-                </div>
-                
+              <div className="flex items-center gap-3">  
                 {/* Action Buttons */}
                 <Button 
                   variant="ghost" 
@@ -490,7 +468,6 @@ export default function StudyCompanion() {
             <CardContent className="p-4 text-center">
               <div className="flex items-center justify-center mb-2">
                 <Crown className="h-6 w-6 group-hover:rotate-12 transition-transform duration-300" />
-                <Sparkles className="h-4 w-4 ml-1 animate-pulse" />
               </div>
               <div className="text-xl font-bold">Level 12</div>
               <div className="text-purple-100 text-xs">Study Master</div>
@@ -501,7 +478,6 @@ export default function StudyCompanion() {
             <CardContent className="p-4 text-center">
               <div className="flex items-center justify-center mb-2">
                 <Flame className="h-6 w-6 group-hover:animate-bounce transition-transform duration-300" />
-                <span className="text-xs ml-1">🔥</span>
               </div>
               <div className="text-xl font-bold">7 Days</div>
               <div className="text-orange-100 text-xs">Study Streak</div>
@@ -511,8 +487,7 @@ export default function StudyCompanion() {
           <Card className="bg-gradient-to-r from-emerald-500 to-green-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group cursor-pointer">
             <CardContent className="p-4 text-center">
               <div className="flex items-center justify-center mb-2">
-                <Trophy className="h-6 w-6 group-hover:rotate-12 transition-transform duration-300" />
-                <Star className="h-4 w-4 ml-1 animate-spin" style={{ animationDuration: '3s' }} />
+                <Trophy className="h-6 w-6 group-hover:scale-110 transition-transform duration-300" />
               </div>
               <div className="text-xl font-bold">2,450</div>
               <div className="text-emerald-100 text-xs">XP Points</div>
@@ -523,7 +498,6 @@ export default function StudyCompanion() {
             <CardContent className="p-4 text-center">
               <div className="flex items-center justify-center mb-2">
                 <Users className="h-6 w-6 group-hover:scale-110 transition-transform duration-300" />
-                <Award className="h-4 w-4 ml-1 animate-pulse" />
               </div>
               <div className="text-xl font-bold">#42</div>
               <div className="text-blue-100 text-xs">Global Rank</div>
@@ -758,111 +732,6 @@ export default function StudyCompanion() {
 
           {/* Enhanced Sidebar */}
           <div className="space-y-6 animate-in fade-in-0 slide-in-from-right-8 duration-1000 delay-1000">
-            {/* Motivational Card */}
-            <Card className="bg-gradient-to-br from-purple-500 via-pink-500 to-red-500 text-white border-0 shadow-2xl hover:shadow-3xl transition-all duration-500 hover:scale-[1.02] group relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              <CardContent className="p-6 relative z-10">
-                <div className="text-center space-y-4">
-                  <div className="relative">
-                    <div className="w-16 h-16 mx-auto bg-white/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-500">
-                      <Lightbulb className="h-8 w-8 text-yellow-300 animate-pulse" />
-                    </div>
-                    <Sparkles className="absolute top-0 right-8 h-5 w-5 text-yellow-300 animate-bounce" />
-                  </div>
-                  <h3 className="text-xl font-bold">You&apos;re On Fire! 🔥</h3>
-                  <p className="text-purple-100 text-sm">Keep building that momentum! Every session makes you stronger.</p>
-                  <div className="flex items-center justify-center gap-2 mt-4">
-                    <Heart className="h-4 w-4 text-pink-300 animate-pulse" />
-                    <span className="text-sm font-medium">+25 XP per session</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Live Session Stats */}
-            <Card className="bg-gradient-to-br from-white to-blue-50/50 dark:from-[#1a1a1a] dark:to-blue-900/10 border-blue-200/50 dark:border-blue-800/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-[1.02] group relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              <CardHeader className="pb-3 relative z-10">
-                <CardTitle className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                  <div className="relative">
-                    <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
-                      <Gamepad2 className="h-5 w-5" />
-                    </div>
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full animate-ping" />
-                  </div>
-                  <div>
-                    <div>Live Stats</div>
-                    <div className="text-sm font-normal text-gray-600 dark:text-gray-400">Real-time Performance</div>
-                  </div>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6 relative z-10">
-                {/* Timer Display */}
-                <div className="text-center bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-2xl p-6 shadow-inner">
-                  <div className="text-4xl font-mono font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent animate-pulse">
-                    {formatTime(studyTime)}
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 font-medium mt-2 flex items-center justify-center gap-1">
-                    <Clock className="h-4 w-4" />
-                    Active Session Time
-                  </p>
-                </div>
-
-                {/* Progress Ring */}
-                <div className="flex justify-center">
-                  <div className="relative">
-                    <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="6" className="text-gray-200 dark:text-gray-700" />
-                      <circle 
-                        cx="50" 
-                        cy="50" 
-                        r="45" 
-                        fill="none" 
-                        stroke="url(#progressGradient)" 
-                        strokeWidth="6" 
-                        strokeLinecap="round"
-                        strokeDasharray={`${sessionProgress * 2.83} 283`}
-                        className="transition-all duration-1000 ease-out"
-                      />
-                      <defs>
-                        <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="#3b82f6" />
-                          <stop offset="100%" stopColor="#8b5cf6" />
-                        </linearGradient>
-                      </defs>
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-center">
-                        <div className="text-lg font-bold text-gray-900 dark:text-white">{Math.round(sessionProgress)}%</div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400">Progress</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Focus & Attention Metrics */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl border border-green-200 dark:border-green-800 transform transition-all duration-300 hover:scale-105">
-                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                      {focusScore}%
-                    </div>
-                    <p className="text-xs text-green-600/80 dark:text-green-400/80 font-medium flex items-center justify-center gap-1">
-                      <Target className="h-3 w-3" />
-                      Focus Score
-                    </p>
-                  </div>
-                  <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-800 transform transition-all duration-300 hover:scale-105">
-                    <div className="text-lg font-bold text-blue-600 dark:text-blue-400 capitalize">
-                      {attentionStatus}
-                    </div>
-                    <p className="text-xs text-blue-600/80 dark:text-blue-400/80 font-medium flex items-center justify-center gap-1">
-                      <Brain className="h-3 w-3" />
-                      Attention
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
 
             {/* AI Analysis Details */}
             <Card className="bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-lg transition-all duration-500 hover:scale-[1.02] group relative overflow-hidden">
@@ -1006,70 +875,7 @@ export default function StudyCompanion() {
                   </div>
                 )}
               </CardContent>
-            </Card>
-
-            {/* Enhanced Quick Actions */}
-            <Card className="bg-gradient-to-br from-white to-orange-50/30 dark:from-[#1a1a1a] dark:to-orange-900/10 border-orange-200/50 dark:border-orange-800/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-[1.02] group relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-[#f4895c]/5 to-[#f4a072]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              <CardHeader className="pb-3 relative z-10">
-                <CardTitle className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                  <div className="relative">
-                    <div className="p-2 rounded-xl bg-gradient-to-br from-[#f4895c] to-[#f4a072] text-white shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
-                      <Zap className="h-5 w-5" />
-                    </div>
-                    <Sparkles className="absolute -top-1 -right-1 h-3 w-3 text-yellow-400 animate-pulse" />
-                  </div>
-                  <div>
-                    <div>Power Actions</div>
-                    <div className="text-sm font-normal text-gray-600 dark:text-gray-400">Boost Your Performance</div>
-                  </div>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 relative z-10">
-                <Button 
-                  variant="ghost" 
-                  className="w-full justify-start h-12 text-sm bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-900/40 dark:hover:to-indigo-900/40 border border-blue-200 dark:border-blue-800 transition-all duration-300 hover:scale-105 group/btn rounded-xl"
-                  onClick={() => router.push('/analytics')}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-1.5 rounded-lg bg-blue-500 text-white">
-                      <TrendingUp className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 text-left">
-                      <div className="font-medium text-gray-900 dark:text-white">View Analytics</div>
-                      <div className="text-xs text-blue-600 dark:text-blue-400">See your progress & insights</div>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-blue-500 transition-transform duration-300 group-hover/btn:translate-x-1" />
-                  </div>
-                </Button>
-                
-                <Button variant="ghost" className="w-full justify-start h-12 text-sm bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 hover:from-green-100 hover:to-emerald-100 dark:hover:from-green-900/40 dark:hover:to-emerald-900/40 border border-green-200 dark:border-green-800 transition-all duration-300 hover:scale-105 group/btn rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <div className="p-1.5 rounded-lg bg-green-500 text-white">
-                      <Target className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 text-left">
-                      <div className="font-medium text-gray-900 dark:text-white">Study Goals</div>
-                      <div className="text-xs text-green-600 dark:text-green-400">Set & track your targets</div>
-                    </div>
-                    <Plus className="h-4 w-4 text-green-500 transition-transform duration-300 group-hover/btn:rotate-90" />
-                  </div>
-                </Button>
-                
-                <Button variant="ghost" className="w-full justify-start h-12 text-sm bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/40 dark:hover:to-pink-900/40 border border-purple-200 dark:border-purple-800 transition-all duration-300 hover:scale-105 group/btn rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <div className="p-1.5 rounded-lg bg-purple-500 text-white">
-                      <Coffee className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 text-left">
-                      <div className="font-medium text-gray-900 dark:text-white">Smart Break</div>
-                      <div className="text-xs text-purple-600 dark:text-purple-400">AI-optimized rest timer</div>
-                    </div>
-                    <Sparkles className="h-4 w-4 text-purple-500 transition-transform duration-300 group-hover/btn:scale-110" />
-                  </div>
-                </Button>
-              </CardContent>
-            </Card>
+            </Card> 
           </div>
         </div>
 
@@ -1086,7 +892,7 @@ export default function StudyCompanion() {
                       <Trophy className="h-6 w-6 text-yellow-300" />
                     </div>
                     <div>
-                      <h3 className="text-2xl font-bold">Achievement Unlocked! 🏆</h3>
+                      <h3 className="text-2xl font-bold">Achievement Unlocked!</h3>
                       <p className="text-indigo-100">You&apos;re building incredible study habits!</p>
                     </div>
                   </div>
