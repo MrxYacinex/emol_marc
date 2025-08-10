@@ -9,8 +9,22 @@ import os
 import time
 import math
 
+# AI Agent Integration
+try:
+    from agents.analyse import LearningAnalyzer
+    from gemini import GeminiAnalyzer
+    AI_AGENT_AVAILABLE = True
+    print("✓ AI Agent Module verfügbar")
+except ImportError as e:
+    AI_AGENT_AVAILABLE = False
+    print(f"⚠️ AI Agent nicht verfügbar: {e}")
+
 app = Flask(__name__)
 CORS(app)
+
+# AI Agent Globale Variablen
+learning_analyzer = None
+current_recommendations = None
 
 # Initialize face detection models
 try:
@@ -46,6 +60,62 @@ FATIGUE_TIME_THRESHOLD = 3
 MOVEMENT_THRESHOLD = 0.01  
 prev_hand_pos = None
 hand_positions = []
+
+# AI Agent Funktionen
+def initialize_ai_agent():
+    """AI Agent initialisieren"""
+    global learning_analyzer, current_recommendations
+    
+    if not AI_AGENT_AVAILABLE:
+        print("⚠️ AI Agent Module nicht verfügbar")
+        return False
+    
+    try:
+        # Gemini Analyzer initialisieren
+        gemini_analyzer = GeminiAnalyzer()
+        
+        # Learning Analyzer initialisieren
+        learning_analyzer = LearningAnalyzer(
+            analysis_window_minutes=5,
+            recommendation_interval_minutes=10
+        )
+        
+        # Gemini mit Learning Analyzer verbinden
+        learning_analyzer.set_gemini_analyzer(gemini_analyzer)
+        
+        # Kontinuierliche Analyse starten
+        learning_analyzer.start_continuous_analysis(
+            recommendation_callback=handle_new_recommendations
+        )
+        
+        print("🚀 AI Agent erfolgreich initialisiert")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Fehler bei AI Agent Initialisierung: {e}")
+        return False
+
+def handle_new_recommendations(recommendations: dict, trend_analysis: dict):
+    """Neue Empfehlungen verarbeiten"""
+    global current_recommendations
+    current_recommendations = {
+        "recommendations": recommendations,
+        "trend_analysis": trend_analysis,
+        "timestamp": time.time()
+    }
+    
+    print("📋 Neue AI-Empfehlungen erhalten:")
+    print(f"  Status: {recommendations.get('overall_status')}")
+    print(f"  Dringlichkeit: {recommendations.get('urgency_level')}")
+    print(f"  Nutzerempfehlungen: {len(recommendations.get('user_recommendations', []))}")
+    print(f"  App-Aktionen: {len(recommendations.get('app_actions', []))}")
+
+# Versuche AI Agent beim Import zu initialisieren
+try:
+    if AI_AGENT_AVAILABLE:
+        initialize_ai_agent()
+except Exception as e:
+    print(f"⚠️ AI Agent Initialisierung beim Start fehlgeschlagen: {e}")
 
 def eye_aspect_ratio(eye):
     A = np.linalg.norm(eye[1] - eye[5])
@@ -453,6 +523,10 @@ def resize_image_keep_aspect(img, max_side=640):
         return cv2.resize(img, (new_w, new_h))
     return img
 
+def mirror_image(img):
+    """Spiegelt das Bild horizontal (für natürlichere Kamera-Ansicht)"""
+    return cv2.flip(img, 1)
+
 @app.route("/api/analyze", methods=["POST"])
 def analyze():
     """
@@ -469,9 +543,15 @@ def analyze():
         return jsonify({"status": "kein Bild"}), 400
 
     image_b64 = data.get("image")
+    mirror_camera = data.get("mirror", False)  # Optional: Kamera spiegeln
+    
     img = decode_image(image_b64)
     if img is None:
         return jsonify({"status": "Bild dekodieren fehlgeschlagen"}), 400
+
+    # Optional: Bild spiegeln für natürlichere Ansicht
+    if mirror_camera:
+        img = mirror_image(img)
 
     img = resize_image_keep_aspect(img, 640)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -581,6 +661,14 @@ def analyze():
         "handAnalysis": hand_analysis
     }
     
+    # AI Agent Integration - Daten weiterleiten
+    if learning_analyzer:
+        try:
+            learning_analyzer.add_analysis_data(response_data)
+            print("✅ Daten an AI Agent weitergeleitet")
+        except Exception as e:
+            print(f"⚠️ Fehler beim Weiterleiten an AI Agent: {e}")
+    
     print(f"🔄 Sending response: {response_data}")
     return jsonify(response_data)
 
@@ -604,8 +692,86 @@ def health():
         "status": "fit",
         "capabilities": capabilities,
         "mediapipe_available": MEDIAPIPE_AVAILABLE,
-        "dlib_available": hog_detector is not None
+        "dlib_available": hog_detector is not None,
+        "ai_agent_available": AI_AGENT_AVAILABLE,
+        "ai_agent_active": learning_analyzer is not None
     })
+
+@app.route("/api/recommendations", methods=["GET"])
+def get_recommendations():
+    """Aktuelle AI-Empfehlungen abrufen"""
+    if current_recommendations:
+        return jsonify(current_recommendations)
+    else:
+        return jsonify({
+            "status": "no_recommendations", 
+            "message": "Keine aktuellen Empfehlungen verfügbar"
+        })
+
+@app.route("/api/agent-status", methods=["GET"])
+def get_agent_status():
+    """AI Agent Status abrufen"""
+    if learning_analyzer:
+        status = learning_analyzer.get_current_status()
+        status["available"] = True
+        return jsonify(status)
+    else:
+        return jsonify({
+            "available": False,
+            "status": "not_initialized",
+            "ai_agent_module_available": AI_AGENT_AVAILABLE
+        })
+
+@app.route("/api/force-analysis", methods=["POST"])
+def force_analysis():
+    """Sofortige AI-Analyse erzwingen (für Tests)"""
+    if not learning_analyzer:
+        return jsonify({
+            "error": "AI Agent nicht initialisiert"
+        }), 400
+    
+    try:
+        result = learning_analyzer.force_analysis()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            "error": f"Analyse fehlgeschlagen: {str(e)}"
+        }), 500
+
+@app.route("/api/motivation", methods=["GET"])
+def get_motivation():
+    """Motivations-Boost abrufen"""
+    if not learning_analyzer or not learning_analyzer.gemini_analyzer:
+        return jsonify({
+            "error": "AI Agent oder Gemini nicht verfügbar"
+        }), 400
+    
+    try:
+        # Letzten Score aus dem Buffer holen
+        if learning_analyzer.data_buffer:
+            last_snapshot = learning_analyzer.data_buffer[-1]
+            current_score = last_snapshot.learning_score
+            
+            # Trend basierend auf letzten paar Werten berechnen
+            recent_scores = [d.learning_score for d in list(learning_analyzer.data_buffer)[-5:]]
+            if len(recent_scores) >= 2:
+                trend = "improving" if recent_scores[-1] > recent_scores[0] else "declining" if recent_scores[-1] < recent_scores[0] else "stable"
+            else:
+                trend = "stable"
+        else:
+            current_score = 70  # Default
+            trend = "stable"
+        
+        motivation = learning_analyzer.gemini_analyzer.generate_motivation_boost(current_score, trend)
+        motivation["current_score"] = current_score
+        motivation["trend"] = trend
+        
+        return jsonify(motivation)
+        
+    except Exception as e:
+        return jsonify({
+            "error": f"Motivations-Generierung fehlgeschlagen: {str(e)}"
+        }), 500
 
 if __name__ == "__main__":
     print("🚀 Starting Unified AI Learning Analytics API...")
