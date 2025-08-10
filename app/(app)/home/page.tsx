@@ -63,6 +63,8 @@ export default function StudyCompanion() {
   })
   const [earValue, setEarValue] = useState(0)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [geminiTestResult, setGeminiTestResult] = useState<string | null>(null)
+  const [isGeminiTesting, setIsGeminiTesting] = useState(false)
   const [finalAnalysis, setFinalAnalysis] = useState<{
     lernfaehigkeitsScore?: number
     attention?: string
@@ -131,7 +133,8 @@ export default function StudyCompanion() {
         setFocusScore(data.lernfaehigkeitsScore || 0)
         setAttentionStatus(data.attention || "No Data")
         setFatigueStatus(data.status || "awake")
-        setGazeDirection(`${data.gazeLeft || "unknown"}/${data.gazeRight || "unknown"}`)
+        // Fix gaze direction for mirrored camera (swap left and right)
+        setGazeDirection(`${data.gazeRight || "unknown"}/${data.gazeLeft || "unknown"}`)
         setHeadPose(data.headPose || { pitch: 0, yaw: 0, roll: 0 })
         setHandAnalysis(data.handAnalysis || {
           hand_fatigue_detected: false,
@@ -211,11 +214,19 @@ export default function StudyCompanion() {
       if (response.ok) {
         const data = await response.json()
         
+        // Debug: Log the original gaze data
+        console.log("AI Analysis - Original data:", {
+          gazeLeft: data.gazeLeft,
+          gazeRight: data.gazeRight,
+          swapped: `${data.gazeRight}/${data.gazeLeft}`
+        })
+        
         // Update AI analysis state
         setFocusScore(data.lernfaehigkeitsScore || 0)
         setAttentionStatus(data.attention || "No Data")
         setFatigueStatus(data.status || "awake")
-        setGazeDirection(`${data.gazeLeft || "unknown"}/${data.gazeRight || "unknown"}`)
+        // Fix gaze direction for mirrored camera (swap left and right)
+        setGazeDirection(`${data.gazeRight || "unknown"}/${data.gazeLeft || "unknown"}`)
         setHeadPose(data.headPose || { pitch: 0, yaw: 0, roll: 0 })
         setHandAnalysis(data.handAnalysis || {
           hand_fatigue_detected: false,
@@ -258,6 +269,42 @@ export default function StudyCompanion() {
     }
   }
 
+  // 🧪 TOKEN-SPARSAMER Gemini Test
+  const testGemini = useCallback(async () => {
+    setIsGeminiTesting(true)
+    setGeminiTestResult(null)
+    
+    try {
+      const response = await fetch('http://localhost:5000/api/test-gemini', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          focus_score: focusScore || 75,
+          attention: attentionStatus || 'focused'
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.gemini_test.success) {
+          setGeminiTestResult(data.gemini_test.test_recommendation)
+          setCurrentSuggestion(`🤖 Gemini: ${data.gemini_test.test_recommendation}`)
+        } else {
+          setGeminiTestResult(`Fehler: ${data.gemini_test.error}`)
+        }
+      } else {
+        setGeminiTestResult("Gemini API nicht erreichbar")
+      }
+    } catch (error) {
+      console.error('Gemini Test Error:', error)
+      setGeminiTestResult("Netzwerk-Fehler beim Gemini Test")
+    } finally {
+      setIsGeminiTesting(false)
+    }
+  }, [focusScore, attentionStatus])
+
   useEffect(() => {
     if (isRecording && !isPaused) {
       timerRef.current = setInterval(() => {
@@ -265,10 +312,10 @@ export default function StudyCompanion() {
         setSessionProgress((prev) => Math.min(prev + 0.5, 100))
       }, 1000)
 
-      // Start AI analysis every 3 seconds
+      // Start AI analysis every 10 seconds (reduced frequency)
       analysisIntervalRef.current = setInterval(() => {
         analyzeFrame()
-      }, 3000)
+      }, 10000)
     } else {
       if (timerRef.current) {
         clearInterval(timerRef.current)
@@ -554,6 +601,18 @@ export default function StudyCompanion() {
                       <span className="text-xs font-medium">Analytics</span>
                     </Button>
                     
+                    {/* Developer Test Button */}
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="bg-purple-500/20 dark:bg-purple-600/20 backdrop-blur-sm border border-purple-300/20 dark:border-purple-700/20 text-purple-600 dark:text-purple-400 hover:bg-purple-500/30 hover:text-purple-700 dark:hover:bg-purple-600/30 dark:hover:text-purple-300 transition-all duration-300 hover:scale-105 active:scale-95 rounded-xl px-3 py-2 shadow-lg" 
+                      onClick={analyzeFrame}
+                      disabled={!isRecording}
+                    >
+                      <Brain className="h-4 w-4 mr-1" />
+                      <span className="text-xs font-medium">Test AI</span>
+                    </Button>
+                    
                     {isRecording && (
                       <div className="flex items-center gap-2 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl px-4 py-2 shadow-lg animate-pulse">
                         <div className="w-2 h-2 bg-white rounded-full animate-ping" />
@@ -566,7 +625,18 @@ export default function StudyCompanion() {
               
               <CardContent className="space-y-6 relative z-10">
                 <div className="relative aspect-video overflow-hidden rounded-2xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 shadow-2xl border border-gray-200/50 dark:border-gray-700/50">
-                  <video ref={videoRef} autoPlay muted className="h-full w-full object-cover transition-all duration-500" />
+                  <video 
+                    ref={videoRef} 
+                    autoPlay 
+                    muted 
+                    className="h-full w-full object-cover transition-all duration-500" 
+                    style={{ 
+                      transform: 'scaleX(-1)',
+                      WebkitTransform: 'scaleX(-1)',
+                      MozTransform: 'scaleX(-1)',
+                      msTransform: 'scaleX(-1)'
+                    }}
+                  />
                   
                   {/* Overlay Elements */}
                   {isRecording && (
@@ -760,7 +830,77 @@ export default function StudyCompanion() {
                   </div>
                 )}
                 
-                <div className="grid grid-cols-2 gap-3 text-xs">
+                {/* Enhanced AI Results Display */}
+                <div className="bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-inner">
+                  {/* Focus Score - Main Metric */}
+                  <div className="text-center mb-4 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm">
+                    <div className="text-3xl font-bold text-[#f4895c] mb-1">{focusScore}%</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 uppercase tracking-wide">Focus Score</div>
+                    <div className={`inline-block px-3 py-1 rounded-full text-xs font-medium mt-2 ${
+                      focusScore >= 80 ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                      focusScore >= 60 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                      'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+                    }`}>
+                      {focusScore >= 80 ? '🎯 Excellent' : focusScore >= 60 ? '⚡ Good' : '📈 Needs Focus'}
+                    </div>
+                  </div>
+                  
+                  {/* Detailed Metrics Grid */}
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 rounded-lg bg-white dark:bg-[#0f0f0f] border border-gray-200 dark:border-gray-800 transition-all duration-300 hover:scale-105">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className={`w-2 h-2 rounded-full ${fatigueStatus === 'tired' ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} />
+                        <span className="text-gray-600 dark:text-gray-400 text-[10px] uppercase tracking-wide">Energy Level:</span>
+                      </div>
+                      <div className={`font-bold text-sm ${fatigueStatus === 'tired' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'} capitalize`}>
+                        {fatigueStatus === 'tired' ? '😴 Tired' : '⚡ Awake'}
+                      </div>
+                    </div>
+                    
+                    <div className="p-3 rounded-lg bg-white dark:bg-[#0f0f0f] border border-gray-200 dark:border-gray-800 transition-all duration-300 hover:scale-105">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-2 h-2 rounded-full bg-blue-500" />
+                        <span className="text-gray-600 dark:text-gray-400 text-[10px] uppercase tracking-wide">Attention:</span>
+                      </div>
+                      <div className={`font-bold text-sm capitalize ${
+                        attentionStatus === 'focused' ? 'text-green-600 dark:text-green-400' :
+                        attentionStatus === 'abgelenkt' ? 'text-red-600 dark:text-red-400' :
+                        'text-gray-600 dark:text-gray-400'
+                      }`}>
+                        {attentionStatus === 'focused' ? '🎯 Focused' : 
+                         attentionStatus === 'abgelenkt' ? '👀 Distracted' : 
+                         '• ' + attentionStatus}
+                      </div>
+                    </div>
+                    
+                    <div className="p-3 rounded-lg bg-white dark:bg-[#0f0f0f] border border-gray-200 dark:border-gray-800 transition-all duration-300 hover:scale-105">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-2 h-2 rounded-full bg-purple-500" />
+                        <span className="text-gray-600 dark:text-gray-400 text-[10px] uppercase tracking-wide">Gaze:</span>
+                      </div>
+                      <div className="font-bold text-sm text-purple-600 dark:text-purple-400">
+                        {gazeDirection.replace('left', '← Left').replace('right', 'Right →').replace('center', '• Center').replace('unknown', '• Unknown')}
+                      </div>
+                    </div>
+                    
+                    <div className="p-3 rounded-lg bg-white dark:bg-[#0f0f0f] border border-gray-200 dark:border-gray-800 transition-all duration-300 hover:scale-105">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-2 h-2 rounded-full bg-orange-500" />
+                        <span className="text-gray-600 dark:text-gray-400 text-[10px] uppercase tracking-wide">Eye Activity:</span>
+                      </div>
+                      <div className="font-bold text-sm text-orange-600 dark:text-orange-400">{earValue.toFixed(1)}% EAR</div>
+                    </div>
+                  </div>
+                  
+                  {/* Analysis Frequency Info */}
+                  <div className="mt-3 text-center">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-lg px-3 py-2 inline-block">
+                      📊 AI Analysis every 10 seconds • Last update: {new Date().toLocaleTimeString()}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs" style={{ display: 'none' }}>
                   <div className="p-2 rounded-lg bg-white dark:bg-[#0f0f0f] border border-gray-200 dark:border-gray-800 transition-all duration-300 hover:scale-105 hover:bg-gray-50 dark:hover:bg-gray-700">
                     <span className="text-gray-600 dark:text-gray-400 text-[10px] uppercase tracking-wide">Fatigue:</span>
                     <div className={`font-bold text-sm ${fatigueStatus === 'tired' ? 'text-red-600 dark:text-red-400 animate-pulse' : 'text-green-400 dark:text-green-600'} capitalize`}>
@@ -768,8 +908,10 @@ export default function StudyCompanion() {
                     </div>
                   </div>
                   <div className="p-2 rounded-lg bg-white dark:bg-[#0f0f0f] border border-gray-200 dark:border-gray-800 transition-all duration-300 hover:scale-105 hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <span className="text-gray-600 dark:text-gray-400 text-[10px] uppercase tracking-wide">Gaze:</span>
-                    <div className="font-bold text-sm text-gray-900 dark:text-white">{gazeDirection}</div>
+                    <span className="text-gray-600 dark:text-gray-400 text-[10px] uppercase tracking-wide">Gaze Direction:</span>
+                    <div className="font-bold text-sm text-gray-900 dark:text-white">
+                      {gazeDirection.replace('left', '←').replace('right', '→').replace('unknown', '•')}
+                    </div>
                   </div>
                   <div className="p-2 rounded-lg bg-white dark:bg-[#0f0f0f] border border-gray-200 dark:border-gray-800 transition-all duration-300 hover:scale-105 hover:bg-gray-50 dark:hover:bg-gray-700">
                     <span className="text-gray-600 dark:text-gray-400 text-[10px] uppercase tracking-wide">EAR:</span>
@@ -863,6 +1005,36 @@ export default function StudyCompanion() {
                         <Zap className="mr-1 h-3 w-3 transition-transform duration-300 group-hover/btn:rotate-12" />
                         Deep Dive
                       </Button>
+                    </div>
+                    
+                    {/* Gemini Test Section */}
+                    <div className="mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={testGemini}
+                        disabled={isGeminiTesting}
+                        className="w-full h-9 text-xs bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-all duration-300 hover:scale-105 disabled:hover:scale-100"
+                      >
+                        {isGeminiTesting ? (
+                          <div className="flex items-center gap-2">
+                            <div className="animate-spin h-3 w-3 border-2 border-purple-500 border-t-transparent rounded-full" />
+                            Testing Gemini...
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="h-3 w-3" />
+                            🧪 Test Gemini AI (~0.001€)
+                          </div>
+                        )}
+                      </Button>
+                      
+                      {geminiTestResult && (
+                        <div className="mt-2 p-2 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 text-xs text-purple-700 dark:text-purple-300">
+                          <div className="font-medium mb-1">🤖 Gemini Response:</div>
+                          <div className="italic">{geminiTestResult}</div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (

@@ -773,6 +773,32 @@ def get_motivation():
             "error": f"Motivations-Generierung fehlgeschlagen: {str(e)}"
         }), 500
 
+@app.route("/api/test-gemini", methods=["POST"])
+def test_gemini():
+    """🧪 TOKEN-SPARSAMER Gemini Test (nur ~50-100 Tokens)"""
+    try:
+        data = request.get_json()
+        focus_score = data.get('focus_score', 75)
+        attention = data.get('attention', 'focused')
+        
+        # Quick Gemini Test über Learning Analyzer
+        if learning_analyzer and learning_analyzer.gemini_analyzer:
+            result = learning_analyzer.gemini_analyzer.test_gemini_quick(focus_score, attention)
+        else:
+            result = {"error": "Gemini Analyzer nicht verfügbar"}
+        
+        return jsonify({
+            "status": "success",
+            "gemini_test": result,
+            "message": "Gemini Test abgeschlossen",
+            "cost_info": "Minimale Kosten (~0.001€)"
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "error": f"Gemini Test fehlgeschlagen: {str(e)}"
+        }), 500
+
 if __name__ == "__main__":
     print("🚀 Starting Unified AI Learning Analytics API...")
     print("📊 Features: Müdigkeitserkennung, Hand-Tracking, Lernfähigkeits-Score, Gaze-Detection")

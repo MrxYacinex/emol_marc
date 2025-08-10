@@ -30,9 +30,46 @@ class GeminiAnalyzer:
         
         # Gemini konfigurieren
         genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-pro')
+        self.model = genai.GenerativeModel('gemini-1.5-flash')  # Günstigeres Modell statt gemini-pro
         
-        print("🤖 Gemini Analyzer initialisiert")
+        print("🤖 Gemini Analyzer initialisiert (Flash-Modell für Effizienz)")
+    
+    def test_gemini_quick(self, focus_score: int = 75, attention: str = "focused") -> Dict:
+        """
+        🧪 TOKEN-SPARSAMER TEST für Gemini (nur ~50-100 Tokens)
+        Kurzer Test mit minimalen Daten
+        """
+        if not hasattr(self, 'model'):
+            return {"error": "Gemini nicht verfügbar"}
+            
+        try:
+            # Minimaler Prompt für Test
+            prompt = f"""Kurze Lernempfehlung für:
+Focus: {focus_score}%
+Attention: {attention}
+
+Antworte in max 30 Wörtern auf Deutsch."""
+
+            response = self.model.generate_content(
+                prompt,
+                generation_config={
+                    'max_output_tokens': 50,  # Sehr begrenzt für Test
+                    'temperature': 0.3
+                }
+            )
+            
+            return {
+                "success": True,
+                "test_recommendation": response.text,
+                "tokens_used": "~50-100",
+                "cost_estimate": "~0.001€"
+            }
+            
+        except Exception as e:
+            return {
+                "error": f"Gemini Test fehlgeschlagen: {str(e)}",
+                "success": False
+            }
     
     def generate_learning_recommendations(self, trend_analysis: Dict) -> Dict:
         """
