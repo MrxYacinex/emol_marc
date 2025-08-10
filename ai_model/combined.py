@@ -41,14 +41,12 @@ except ImportError:
     MEDIAPIPE_AVAILABLE = False
     print("⚠ MediaPipe not available - using dlib only mode")
 
-# Global variables for hand tracking (from your test_hand.py)
 hand_close_start_time = None
-FATIGUE_TIME_THRESHOLD = 3  # Sekunden, ab wann Müdigkeit erkannt wird
-MOVEMENT_THRESHOLD = 0.01   # minimale Bewegung für "ruhig"
+FATIGUE_TIME_THRESHOLD = 3  
+MOVEMENT_THRESHOLD = 0.01  
 prev_hand_pos = None
 hand_positions = []
 
-# Your original functions from main.py
 def eye_aspect_ratio(eye):
     A = np.linalg.norm(eye[1] - eye[5])
     B = np.linalg.norm(eye[2] - eye[4])
@@ -544,6 +542,12 @@ def analyze():
     # Hand gesture analysis
     hand_analysis = analyze_hand_gestures(img)
 
+    print(".")
+    print(".")
+    print(".")
+    print("-------------------START----------------------")
+
+
     print(f"Method: {method_used}")
     print(f"EAR: {ear_percent}")
     print(f"Gaze Left: {left_gaze}")
@@ -554,6 +558,11 @@ def analyze():
     print(f"Status: {attention_status}")
     print(f"Lernfähigkeits-Score: {lernfaehigkeits_score_value}")
     print(f"Hand Analysis: {hand_analysis}")
+
+    print("----------------------END-----------------------")
+    print(".")
+    print(".")
+    print(".")
 
     response_data = {
         "methodUsed": method_used,
@@ -592,7 +601,7 @@ def health():
         capabilities.append("MediaPipe Face Mesh")
     
     return jsonify({
-        "status": "healthy",
+        "status": "fit",
         "capabilities": capabilities,
         "mediapipe_available": MEDIAPIPE_AVAILABLE,
         "dlib_available": hog_detector is not None
