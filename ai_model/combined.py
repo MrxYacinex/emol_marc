@@ -8,6 +8,10 @@ from flask_cors import CORS
 import os
 import time
 import math
+import logging
+import uuid
+import atexit
+from datetime import datetime
 
 # AI Agent Integration
 try:
@@ -26,6 +30,10 @@ CORS(app)
 learning_analyzer = None
 current_recommendations = None
 
+# Global session tracking
+current_session_id = None
+session_start_time = None
+
 # Initialize face detection models
 try:
     # Use absolute path to ensure the model is found
@@ -40,20 +48,59 @@ except Exception as e:
     hog_detector = None
 
 # Try to initialize MediaPipe (fallback if not available)
+# Initialize MediaPipe variables
+mp_face_mesh = None
+mp_pose = None
+mp_hands = None
+face_mesh = None
+pose = None
+hands = None
+MEDIAPIPE_AVAILABLE = False
 try:
     import mediapipe as mp
     mp_face_mesh = mp.solutions.face_mesh
     mp_pose = mp.solutions.pose
     mp_hands = mp.solutions.hands
-    
-    face_mesh = mp_face_mesh.FaceMesh(static_image_mode=True)
+    print("mp_face_mesh", mp_face_mesh)
+    print("mp_pose", mp_pose)
+    face_mesh = mp_face_mesh.FaceMesh(
+        static_image_mode=False,
+        max_num_faces=1,
+        refine_landmarks=False,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5
+    )
     pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
-    hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
+    # Lowered detection thresholds for better hand detection
+    hands = mp_hands.Hands(
+        static_image_mode=False,
+        max_num_hands=2,
+        min_detection_confidence=0.5,  # Lowered from 0.7
+        min_tracking_confidence=0.5    # Lowered from 0.7
+    )
     MEDIAPIPE_AVAILABLE = True
     print("✓ MediaPipe loaded successfully")
-except ImportError:
+except Exception as e:
     MEDIAPIPE_AVAILABLE = False
-    print("⚠ MediaPipe not available - using dlib only mode")
+    print(f"⚠ MediaPipe not available: {str(e)}")
+    print("  Server will continue without MediaPipe functionality")
+
+# Database Bridge Integration
+try:
+    import sys
+    # Add the parent directory to sys.path to import from the Next.js project
+    nextjs_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.append(nextjs_path)
+    
+    # Import the database bridge
+    from database_bridge import DatabaseBridge
+    db_bridge = DatabaseBridge()
+    DATABASE_AVAILABLE = True
+    print("✓ Database Bridge connected successfully")
+except ImportError as e:
+    DATABASE_AVAILABLE = False
+    db_bridge = None
+    print(f"⚠️ Database Bridge not available: {e}")
 
 hand_close_start_time = None
 FATIGUE_TIME_THRESHOLD = 3  
@@ -353,6 +400,7 @@ def analyze_hand_gestures(img):
         print(f"✓ Hand detection successful - {num_hands} hand(s) detected")
     else:
         print("❌ No hands detected - no wrist data available")
+        print("💡 Tip: Make sure your hands are visible in the camera frame")
 
     # Check if pose landmarks were detected
     if results_pose.pose_landmarks:
@@ -365,12 +413,12 @@ def analyze_hand_gestures(img):
     playing_with_hair = False
     hand_movement = "normal"
 
-    # Combined condition: proceed if we have either chin position and hand landmarks,
-    # or pose landmarks and hand landmarks
-    if ((chin_pos and results_hands.multi_hand_landmarks) or
-            (results_pose.pose_landmarks and results_hands.multi_hand_landmarks)):
-
-        print("✓ Sufficient landmarks detected - proceeding with analysis")
+    # Modified condition: Allow analysis even without hands if we have face landmarks
+    # This will still provide basic fatigue detection based on facial features
+    if results_hands.multi_hand_landmarks:
+        # Full hand analysis when hands are detected
+        print("🔍 Performing full hand + face analysis")
+        
         pose_landmarks = None
         nose_pos, mouth_pos = None, None
 
@@ -496,12 +544,22 @@ def analyze_hand_gestures(img):
                 print(f"✓ Hand {i + 1}: First frame - no previous position to compare")
 
             prev_hand_pos = current_hand_pos
+            
+    elif chin_pos:
+        # Fallback analysis using only facial landmarks when hands are not detected
+        print("🔍 Performing face-only analysis (hands not visible)")
+        print("💡 Hand gestures cannot be analyzed without visible hands")
+        
+        # Reset hand-related timers since we can't see hands
+        if hand_close_start_time is not None:
+            print("🔄 Resetting hand fatigue timer (hands not visible)")
+            hand_close_start_time = None
+            
     else:
-        print("❌ Missing required landmarks - skipping detailed analysis")
-        if not chin_pos and not results_pose.pose_landmarks:
-            print("  - Missing head position (either chin or pose)")
+        print("❌ Insufficient landmarks for any analysis")
+        print("  - Missing face landmarks for fallback analysis")
         if not results_hands.multi_hand_landmarks:
-            print("  - Missing hand landmarks")
+            print("  - Missing hand landmarks for full analysis")
 
     analysis_results = {
         'hand_fatigue_detected': fatigue_detected,
@@ -511,9 +569,6 @@ def analyze_hand_gestures(img):
     }
     print("🔍 Hand Gesture Analysis Results:", analysis_results)
     return analysis_results
-def backdoor():
-    while 1 < 2:
-        print('NULL')
 
 def resize_image_keep_aspect(img, max_side=640):
     h, w = img.shape[:2]
@@ -527,150 +582,358 @@ def mirror_image(img):
     """Spiegelt das Bild horizontal (für natürlichere Kamera-Ansicht)"""
     return cv2.flip(img, 1)
 
+@app.route("/api/start-session", methods=["POST"])
+def start_session():
+    global current_session_id, session_start_time
+    try:
+        data = request.get_json() or {}
+        session_id = data.get('sessionId') or str(uuid.uuid4())
+        
+        current_session_id = session_id
+        session_start_time = datetime.now()
+        
+        # Start session in database if available
+        if DATABASE_AVAILABLE and db_bridge:
+            success = db_bridge.start_session(session_id)
+            if not success:
+                print(f"⚠️ Failed to start session in database: {session_id}")
+        
+        return jsonify({
+            "status": "success",
+            "sessionId": session_id,
+            "startTime": session_start_time.isoformat(),
+            "message": "Session started successfully",
+            "databaseConnected": DATABASE_AVAILABLE
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error", 
+            "message": f"Error starting session: {str(e)}"
+        }), 500
+
+@app.route("/api/end-session", methods=["POST"])
+def end_session():
+    global current_session_id, session_start_time
+    try:
+        data = request.get_json() or {}
+        session_id = data.get('sessionId') or current_session_id
+        
+        if not session_id:
+            return jsonify({
+                "status": "error",
+                "message": "No active session to end"
+            }), 400
+        
+        # Calculate duration
+        if session_start_time:
+            duration = int((datetime.now() - session_start_time).total_seconds())
+        else:
+            duration = data.get('totalDuration', 0)
+        
+        # End session in database if available
+        if DATABASE_AVAILABLE and db_bridge:
+            success = db_bridge.end_session(session_id, duration)
+            if not success:
+                print(f"⚠️ Failed to end session in database: {session_id}")
+        
+        current_session_id = None
+        session_start_time = None
+        
+        return jsonify({
+            "status": "success",
+            "sessionId": session_id,
+            "duration": duration,
+            "message": "Session ended successfully",
+            "databaseConnected": DATABASE_AVAILABLE
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Error ending session: {str(e)}"
+        }), 500
+
+@app.route("/api/database/export", methods=["GET"])
+def export_database():
+    """Export database data as JSON"""
+    try:
+        if DATABASE_AVAILABLE and db_bridge:
+            # Get real data from database
+            data = db_bridge.get_all_data()
+            print(f"🔄 Exporting database data:")
+            print(f"  Sessions: {len(data.get('sessions', []))}")
+            print(f"  Analyses: {len(data.get('analyses', []))}")
+            print(f"  Summaries: {len(data.get('summaries', []))}")
+            return jsonify({
+                "success": True,
+                "data": data,
+                "timestamp": datetime.now().isoformat(),
+                "source": "database"
+            })
+        else:
+            # Return empty data structure (no mock data)
+            print("⚠️ Database not available, returning empty data structure")
+            empty_data = {
+                "sessions": [],
+                "analyses": [],
+                "summaries": []
+            }
+            return jsonify({
+                "success": True,
+                "data": empty_data,
+                "timestamp": datetime.now().isoformat(),
+                "source": "empty"
+            })
+    except Exception as e:
+        print(f"❌ Error exporting database: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"Failed to export database: {str(e)}"
+        }), 500
+
+@app.route("/api/database/export", methods=["POST"])
+def download_database():
+    """Download database data as file"""
+    try:
+        data = request.get_json() or {}
+        format_type = data.get('format', 'json')
+        
+        if format_type == 'json':
+            # Get the real data (same as GET endpoint)
+            if DATABASE_AVAILABLE and db_bridge:
+                export_data = db_bridge.get_all_data()
+            else:
+                export_data = {
+                    "sessions": [],
+                    "analyses": [],
+                    "summaries": [],
+                    "exported_at": datetime.now().isoformat(),
+                    "version": "1.0"
+                }
+            
+            from flask import Response
+            import json
+            
+            json_string = json.dumps(export_data, indent=2)
+            
+            return Response(
+                json_string,
+                mimetype='application/json',
+                headers={
+                    'Content-Disposition': f'attachment; filename="study_data_{int(datetime.now().timestamp())}.json"'
+                }
+            )
+        else:
+            return jsonify({"error": "Unsupported format"}), 400
+            
+    except Exception as e:
+        return jsonify({
+            "error": f"Failed to download database: {str(e)}"
+        }), 500
+
+@app.route("/api/status", methods=["GET"])
+def get_status():
+    return jsonify({
+        "status": "running",
+        "currentSession": current_session_id,
+        "sessionStartTime": session_start_time.isoformat() if session_start_time else None,
+        "features": {
+            "ai_agent": AI_AGENT_AVAILABLE,
+            "mediapipe": MEDIAPIPE_AVAILABLE,
+            "dlib": predictor is not None
+        },
+        "database": {
+            "available": DATABASE_AVAILABLE,
+            "type": "file_based" if DATABASE_AVAILABLE else "unavailable"
+        }
+    })
+
 @app.route("/api/analyze", methods=["POST"])
 def analyze():
-    """
-    Unified analysis endpoint that combines all features:
-    - Face detection (dlib + MediaPipe)
-    - Eye tracking and fatigue detection
-    - Gaze direction analysis
-    - Head pose estimation
-    - Hand gesture analysis
-    - Learning capability scoring
-    """
-    data = request.get_json()
-    if not data or "image" not in data:
-        return jsonify({"status": "kein Bild"}), 400
-
-    image_b64 = data.get("image")
-    mirror_camera = data.get("mirror", False)  # Optional: Kamera spiegeln
+    global current_session_id
     
-    img = decode_image(image_b64)
-    if img is None:
-        return jsonify({"status": "Bild dekodieren fehlgeschlagen"}), 400
+    try:
+        data = request.get_json()
+        if not data or 'image' not in data:
+            return jsonify({"error": "No image data provided"}), 400
 
-    # Optional: Bild spiegeln für natürlichere Ansicht
-    if mirror_camera:
+        image_data = data['image']
+        img = decode_image(image_data)
+        
+        if img is None:
+            return jsonify({"error": "Failed to decode image"}), 400
+
+        img = resize_image_keep_aspect(img, max_side=640)
         img = mirror_image(img)
 
-    img = resize_image_keep_aspect(img, 640)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        face_count = 0
+        avgEAR = 999
+        gazeLeft = "unknown"
+        gazeRight = "unknown"
+        attention = "No Data"
+        lernfaehigkeitsScore = 0
+        methodUsed = "none"
+        pitch, yaw, roll = 0, 0, 0
+        status = "unknown"
+        face_analysis_successful = False  # Track if face analysis was successful
 
-    # Try dlib first
-    rects = hog_detector(gray, 1) if hog_detector else []
+        # Hand analysis
+        hand_analysis = analyze_hand_gestures(img)
+        hand_fatigue_detected = hand_analysis['hand_fatigue_detected']
+        hand_at_head = hand_analysis['hand_at_head']
+        playing_with_hair = hand_analysis['playing_with_hair']
+        hand_movement_status = hand_analysis['hand_movement']
 
-    if len(rects) > 0:
-        rect = rects[0]
-        shape = predictor(gray, rect)
-        shape = face_utils.shape_to_np(shape)
-        method_used = "dlib"
-        faces_detected = len(rects)
-    else:
-        # Fallback to MediaPipe
-        shape = get_landmarks_mediapipe(img)
-        method_used = "mediapipe"
-        faces_detected = 1 if shape is not None else 0
-        if shape is None:
-            return jsonify({"status": "kein Gesicht erkannt"})
+        # Face detection logic
+        if hog_detector is not None:
+            faces = hog_detector(gray)
+            face_count = len(faces)
 
-    # Eye analysis
-    if method_used == "dlib":
-        leftEye = shape[36:42]
-        rightEye = shape[42:48]
-    else:
-        # MediaPipe: Augenindizes approximieren
-        leftEye_indices = [33, 160, 158, 133, 153, 144]
-        rightEye_indices = [263, 387, 385, 362, 380, 373]
-        leftEye = np.array([shape[i] for i in leftEye_indices])
-        rightEye = np.array([shape[i] for i in rightEye_indices])
+            if face_count > 0:
+                face = faces[0]
+                landmarks = predictor(gray, face)
+                landmarks = face_utils.shape_to_np(landmarks)
 
-    leftEAR = eye_aspect_ratio(leftEye)
-    rightEAR = eye_aspect_ratio(rightEye)
-    ear = (leftEAR + rightEAR) / 2.0
-    ear_percent = round(ear * 100, 1)
+                leftEye = landmarks[36:42]
+                rightEye = landmarks[42:48]
 
-    status_fatigue = "tired" if ear < 0.25 else "awake"
+                leftEAR = eye_aspect_ratio(leftEye)
+                rightEAR = eye_aspect_ratio(rightEye)
+                avgEAR = (leftEAR + rightEAR) / 2.0
 
-    # Gaze direction
-    left_gaze = gaze_direction(leftEye, gray)
-    right_gaze = gaze_direction(rightEye, gray)
+                gazeLeft = gaze_direction(leftEye, gray)
+                gazeRight = gaze_direction(rightEye, gray)
 
-    # Head pose
-    if method_used == "dlib":
-        pitch, yaw, roll = get_head_pose(shape, img.shape)
-    else:
-        pitch, yaw, roll = get_head_pose_mediapipe(shape, img.shape)
+                pitch, yaw, roll = get_head_pose(landmarks, img.shape)
+                lernfaehigkeitsScore = lernfaehigkeits_score(avgEAR, gazeLeft, gazeRight, pitch, yaw)
+                methodUsed = "dlib"
+                face_analysis_successful = True  # Face analysis was successful
+            else:
+                methodUsed = "dlib_no_face"
+        elif MEDIAPIPE_AVAILABLE:
+            landmarks = get_landmarks_mediapipe(img)
+            if landmarks is not None:
+                face_count = 1
+                
+                if len(landmarks) >= 468:
+                    left_eye_indices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
+                    right_eye_indices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]
+                    
+                    if all(i < len(landmarks) for i in left_eye_indices + right_eye_indices):
+                        leftEye = landmarks[left_eye_indices]
+                        rightEye = landmarks[right_eye_indices]
+                        
+                        leftEAR = eye_aspect_ratio(leftEye)
+                        rightEAR = eye_aspect_ratio(rightEye)
+                        avgEAR = (leftEAR + rightEAR) / 2.0
+                        
+                        gazeLeft = gaze_direction(leftEye, gray)
+                        gazeRight = gaze_direction(rightEye, gray)
+                        
+                        pitch, yaw, roll = get_head_pose_mediapipe(landmarks, img.shape)
+                        lernfaehigkeitsScore = lernfaehigkeits_score(avgEAR, gazeLeft, gazeRight, pitch, yaw)
+                        methodUsed = "mediapipe"
+                        face_analysis_successful = True  # Face analysis was successful
+                    else:
+                        methodUsed = "mediapipe_insufficient_landmarks"
+                else:
+                    methodUsed = "mediapipe_few_landmarks"
+            else:
+                methodUsed = "mediapipe_no_face"
 
-    # Attention analysis
-    attention_head_pose = "aufmerksam"
-    if abs(yaw) > 20 or abs(pitch) > 15:
-        attention_head_pose = "abgelenkt"
+        # Determine attention and status
+        if avgEAR != 999:
+            if avgEAR < 0.20:
+                attention = "müde"
+                status = "tired"
+            elif gazeLeft == "center" and gazeRight == "center":
+                attention = "focused"
+                status = "awake"
+            else:
+                attention = "abgelenkt"
+                status = "awake"
+        else:
+            attention = "No Data"
+            status = "unknown"
 
-    attention_count = 0
-    if ear >= 0.25:
-        attention_count += 1
-    if left_gaze == "center" and right_gaze == "center":
-        attention_count += 1
-    if attention_head_pose == "aufmerksam":
-        attention_count += 1
-
-    attention_status = "aufmerksam" if attention_count >= 2 else "abgelenkt"
-
-    # Learning capability score
-    lernfaehigkeits_score_value = lernfaehigkeits_score(ear, left_gaze, right_gaze, pitch, yaw)
-
-    # Hand gesture analysis
-    hand_analysis = analyze_hand_gestures(img)
-
-    print(".")
-    print(".")
-    print(".")
-    print("-------------------START----------------------")
-
-
-    print(f"Method: {method_used}")
-    print(f"EAR: {ear_percent}")
-    print(f"Gaze Left: {left_gaze}")
-    print(f"Gaze Right: {right_gaze}")
-    print(f"Pitch: {pitch:.2f}")
-    print(f"Yaw: {yaw:.2f}")
-    print(f"Attention count: {attention_count}")
-    print(f"Status: {attention_status}")
-    print(f"Lernfähigkeits-Score: {lernfaehigkeits_score_value}")
-    print(f"Hand Analysis: {hand_analysis}")
-
-    print("----------------------END-----------------------")
-    print(".")
-    print(".")
-    print(".")
-
-    response_data = {
-        "methodUsed": method_used,
-        "status": status_fatigue,
-        "avgEAR": ear_percent,
-        "facesDetected": faces_detected,
-        "gazeLeft": left_gaze,
-        "gazeRight": right_gaze,
-        "headPose": {
-            "pitch": pitch,
-            "yaw": yaw,
-            "roll": roll
-        },
-        "attention": attention_status,
-        "lernfaehigkeitsScore": lernfaehigkeits_score_value,
-        "handAnalysis": hand_analysis
-    }
-    
-    # AI Agent Integration - Daten weiterleiten
-    if learning_analyzer:
-        try:
-            learning_analyzer.add_analysis_data(response_data)
-            print("✅ Daten an AI Agent weitergeleitet")
-        except Exception as e:
-            print(f"⚠️ Fehler beim Weiterleiten an AI Agent: {e}")
-    
-    print(f"🔄 Sending response: {response_data}")
-    return jsonify(response_data)
+        # Create response data
+        response_data = {
+            "status": status,
+            "avgEAR": round(avgEAR, 2) if avgEAR != 999 else 999,
+            "gazeLeft": gazeLeft,
+            "gazeRight": gazeRight,
+            "attention": attention,
+            "lernfaehigkeitsScore": lernfaehigkeitsScore,
+            "methodUsed": methodUsed,
+            "facesDetected": face_count,
+            "headPose": {
+                "pitch": round(pitch, 3),
+                "yaw": round(yaw, 3),
+                "roll": round(roll, 3)
+            },
+            "handAnalysis": {
+                "hand_fatigue_detected": hand_fatigue_detected,
+                "hand_at_head": hand_at_head,
+                "playing_with_hair": playing_with_hair,
+                "hand_movement": hand_movement_status
+            },
+            "sessionId": current_session_id,
+            "hasActiveSession": current_session_id is not None,
+            "timestamp": datetime.now().isoformat(),
+            "focusScore": lernfaehigkeitsScore,
+            "attentionStatus": attention,
+            "fatigueStatus": status,
+            "gazeDirection": f"{gazeRight}/{gazeLeft}",
+            "earValue": round(avgEAR, 2) if avgEAR != 999 else 0
+        }
+        
+        # Only store analysis in database if face analysis was successful
+        if current_session_id and DATABASE_AVAILABLE and db_bridge and face_analysis_successful:
+            analysis_data = {
+                "sessionId": current_session_id,
+                "timestamp": response_data["timestamp"],
+                "focusScore": lernfaehigkeitsScore,
+                "attentionStatus": attention,
+                "fatigueStatus": status,
+                "gazeDirection": f"{gazeRight}/{gazeLeft}",
+                "earValue": round(avgEAR, 2) if avgEAR != 999 else 0,
+                "headPose": {
+                    "pitch": round(pitch, 3),
+                    "yaw": round(yaw, 3),
+                    "roll": round(roll, 3)
+                },
+                "handAnalysis": {
+                    "hand_fatigue_detected": hand_fatigue_detected,
+                    "hand_at_head": hand_at_head,
+                    "playing_with_hair": playing_with_hair,
+                    "hand_movement": hand_movement_status
+                },
+                "methodUsed": methodUsed,
+                "facesDetected": face_count
+            }
+            
+            # Debug: Print what we're about to store
+            print(f"💾 Storing analysis with Focus Score: {lernfaehigkeitsScore} (Face detected)")
+            
+            success = db_bridge.store_analysis(current_session_id, analysis_data)
+            if success:
+                print(f"📊 Stored analysis for session: {current_session_id}")
+            else:
+                print(f"❌ Failed to store analysis for session: {current_session_id}")
+        elif current_session_id and not face_analysis_successful:
+            print(f"⏭️ Skipping database storage - no face analysis (method: {methodUsed})")
+                
+        response_data["databaseStored"] = DATABASE_AVAILABLE and current_session_id is not None and face_analysis_successful
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"❌ Analysis error: {str(e)}")
+        return jsonify({
+            "error": str(e),
+            "status": "error",
+            "hasActiveSession": current_session_id is not None
+        }), 500
 
 @app.route("/api/health", methods=["GET"])
 def health():
@@ -681,7 +944,7 @@ def health():
         "Lernfähigkeits-Score",
         "Hand-Gesten Analyse",
         "Blickrichtungs-Erkennung",
-        "Kopfpose Estimation"
+        "Kopfpose Estimation",
     ]
     
     if MEDIAPIPE_AVAILABLE:
@@ -704,7 +967,7 @@ def get_recommendations():
         return jsonify(current_recommendations)
     else:
         return jsonify({
-            "status": "no_recommendations", 
+            "status": "no_recommendations",
             "message": "Keine aktuellen Empfehlungen verfügbar"
         })
 
@@ -741,11 +1004,6 @@ def force_analysis():
 @app.route("/api/motivation", methods=["GET"])
 def get_motivation():
     """Motivations-Boost abrufen"""
-    if not learning_analyzer or not learning_analyzer.gemini_analyzer:
-        return jsonify({
-            "error": "AI Agent oder Gemini nicht verfügbar"
-        }), 400
-    
     try:
         # Letzten Score aus dem Buffer holen
         if learning_analyzer.data_buffer:
@@ -758,15 +1016,12 @@ def get_motivation():
                 trend = "improving" if recent_scores[-1] > recent_scores[0] else "declining" if recent_scores[-1] < recent_scores[0] else "stable"
             else:
                 trend = "stable"
-        else:
-            current_score = 70  # Default
-            trend = "stable"
-        
-        motivation = learning_analyzer.gemini_analyzer.generate_motivation_boost(current_score, trend)
-        motivation["current_score"] = current_score
-        motivation["trend"] = trend
-        
-        return jsonify(motivation)
+            
+            motivation = learning_analyzer.gemini_analyzer.generate_motivation_boost(current_score, trend)
+            motivation["current_score"] = current_score
+            motivation["trend"] = trend
+            
+            return jsonify(motivation)
         
     except Exception as e:
         return jsonify({
@@ -804,4 +1059,5 @@ if __name__ == "__main__":
     print("📊 Features: Müdigkeitserkennung, Hand-Tracking, Lernfähigkeits-Score, Gaze-Detection")
     print(f"📱 MediaPipe: {'✓ Verfügbar' if MEDIAPIPE_AVAILABLE else '✗ Nicht verfügbar'}")
     print(f"🔍 Dlib: {'✓ Verfügbar' if hog_detector else '✗ Nicht verfügbar'}")
+    print(f"💾 Database: {'✓ Verfügbar' if DATABASE_AVAILABLE else '✗ Nicht verfügbar'}")
     app.run(host='0.0.0.0', port=5000, debug=True)

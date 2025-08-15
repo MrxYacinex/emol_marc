@@ -1,0 +1,14 @@
+{
+  "sessionId": "session_1755286594693_k55hnezky",
+  "startTime": "2025-08-15T19:36:34.803Z",
+  "active": false,
+  "endTime": "2025-08-15T21:37:39.682137",
+  "duration": 64,
+  "completed": true,
+  "averageFocusScore": 45.714285714285715,
+  "maxFocusScore": 80,
+  "minFocusScore": 0,
+  "totalAnalyses": 7,
+  "attentionSummary": "focused",
+  "fatigueSummary": "awake"
+}

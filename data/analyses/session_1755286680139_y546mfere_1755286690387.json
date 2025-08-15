@@ -1,0 +1,23 @@
+{
+  "sessionId": "session_1755286680139_y546mfere",
+  "timestamp": "2025-08-15T21:38:10.386932",
+  "focusScore": 80,
+  "attentionStatus": "focused",
+  "fatigueStatus": "awake",
+  "gazeDirection": "center/center",
+  "earValue": 0.35,
+  "headPose": {
+    "pitch": 177.701,
+    "yaw": -18.739,
+    "roll": 4.027
+  },
+  "handAnalysis": {
+    "hand_fatigue_detected": false,
+    "hand_at_head": false,
+    "playing_with_hair": false,
+    "hand_movement": "normal"
+  },
+  "methodUsed": "dlib",
+  "facesDetected": 1,
+  "stored_at": "2025-08-15T21:38:10.387021"
+}

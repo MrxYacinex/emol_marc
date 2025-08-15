@@ -39,6 +39,7 @@ import {
   ChevronRight,
   Plus
 } from "lucide-react"
+import { FocusChart } from "@/components/ui/FocusChart"
 
 export default function StudyCompanion() {
   const router = useRouter()
@@ -46,6 +47,7 @@ export default function StudyCompanion() {
   const [isPaused, setIsPaused] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [studyTime, setStudyTime] = useState(0)
+  const [sessionTime, setSessionTime] = useState(0) // New session time state
   const [sessionProgress, setSessionProgress] = useState(0)
   const [currentSuggestion, setCurrentSuggestion] = useState("")
   
@@ -309,6 +311,7 @@ export default function StudyCompanion() {
     if (isRecording && !isPaused) {
       timerRef.current = setInterval(() => {
         setStudyTime((prev) => prev + 1)
+        setSessionTime((prev) => prev + 1) // Increment session time
         setSessionProgress((prev) => Math.min(prev + 0.5, 100))
       }, 1000)
 
@@ -347,6 +350,33 @@ export default function StudyCompanion() {
         streamRef.current = stream
       }
 
+      // Start session with Flask backend
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      
+      try {
+        const response = await fetch('http://localhost:5000/api/start-session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sessionId: sessionId
+          })
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          console.log('✅ Session started:', data)
+          setCurrentSuggestion(`📊 Session started: ${sessionId.substring(0, 12)}... (DB: ${data.databaseConnected ? '✓' : '✗'})`)
+        } else {
+          console.error('Failed to start session with backend')
+          setCurrentSuggestion("Session started locally (backend offline)")
+        }
+      } catch (error) {
+        console.error('Error starting session:', error)
+        setCurrentSuggestion("Session started locally (backend offline)")
+      }
+
       setIsRecording(true)
     } catch (error) {
       console.error("Error accessing camera:", error)
@@ -355,6 +385,10 @@ export default function StudyCompanion() {
 
   const pauseRecording = () => {
     setIsPaused(!isPaused)
+    // Reset session time when pausing
+    if (!isPaused) {
+      setSessionTime(0)
+    }
   }
 
   const stopRecording = async () => {
@@ -368,6 +402,31 @@ export default function StudyCompanion() {
 
     // Perform final analysis on the frozen frame
     await performFinalAnalysis()
+
+    // End session with Flask backend
+    try {
+      const response = await fetch('http://localhost:5000/api/end-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          totalDuration: studyTime
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('✅ Session ended:', data)
+        setCurrentSuggestion(`✅ Session completed! Duration: ${formatTime(studyTime)} (${data.databaseConnected ? 'Saved to DB' : 'Local only'})`)
+      } else {
+        console.error('Failed to end session with backend')
+        setCurrentSuggestion(`Session completed! Duration: ${formatTime(studyTime)}`)
+      }
+    } catch (error) {
+      console.error('Error ending session:', error)
+      setCurrentSuggestion(`Session completed! Duration: ${formatTime(studyTime)}`)
+    }
 
     // Stop the video stream
     if (streamRef.current) {
@@ -396,6 +455,7 @@ export default function StudyCompanion() {
     setIsRecording(false)
     setIsPaused(false)
     setStudyTime(0)
+    setSessionTime(0) // Reset session time
     setSessionProgress(0)
     setCurrentSuggestion("")
     setFocusScore(0)
@@ -477,35 +537,69 @@ export default function StudyCompanion() {
             
             {/* Progress Ring */}
             <div className="flex items-center justify-center mb-6">
-              <div className="relative">
-                <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 120 120">
-                  <circle cx="60" cy="60" r="54" fill="none" stroke="currentColor" strokeWidth="8" className="text-gray-200 dark:text-gray-700" />
-                  <circle 
-                    cx="60" 
-                    cy="60" 
-                    r="54" 
-                    fill="none" 
-                    stroke="url(#gradient)" 
-                    strokeWidth="8" 
-                    strokeLinecap="round"
-                    strokeDasharray={`${sessionProgress * 3.39} 339`}
-                    className="transition-all duration-1000 ease-out"
-                  />
-                  <defs>
-                    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#f4895c" />
-                      <stop offset="100%" stopColor="#f4a072" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">{formatTime(studyTime)}</div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">Session Time</div>
+              <div className="flex items-center gap-8">
+                {/* Session Time Ring */}
+                <div className="relative">
+                  <svg className="w-28 h-28 transform -rotate-90" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="54" fill="none" stroke="currentColor" strokeWidth="6" className="text-gray-200 dark:text-gray-700" />
+                    <circle 
+                      cx="60" 
+                      cy="60" 
+                      r="54" 
+                      fill="none" 
+                      stroke="url(#sessionGradient)" 
+                      strokeWidth="6" 
+                      strokeLinecap="round"
+                      strokeDasharray={`${Math.min(sessionTime * 0.5, 100) * 3.39} 339`}
+                      className="transition-all duration-1000 ease-out"
+                    />
+                    <defs>
+                      <linearGradient id="sessionGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#3b82f6" />
+                        <stop offset="100%" stopColor="#1d4ed8" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="text-xl font-bold text-white dark:text-white">{formatTime(sessionTime)}</div>
+                      <div className="text-xs text-white dark:text-white">Session</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Study Time Ring */}
+                <div className="relative">
+                  <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="54" fill="none" stroke="currentColor" strokeWidth="8" className="text-gray-200 dark:text-gray-700" />
+                    <circle 
+                      cx="60" 
+                      cy="60" 
+                      r="54" 
+                      fill="none" 
+                      stroke="url(#gradient)" 
+                      strokeWidth="8" 
+                      strokeLinecap="round"
+                      strokeDasharray={`${sessionProgress * 3.39} 339`}
+                      className="transition-all duration-1000 ease-out"
+                    />
+                    <defs>
+                      <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#f4895c" />
+                        <stop offset="100%" stopColor="#f4a072" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-white dark:text-white">{formatTime(studyTime)}</div>
+                      <div className="text-xs text-white dark:text-white">Total Time</div> 
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+
           </div>
         </div>
 
@@ -584,8 +678,13 @@ export default function StudyCompanion() {
                         </div>
                         <div className="w-px h-8 bg-green-300 dark:bg-green-600" />
                         <div className="text-center">
-                          <div className="text-lg font-bold text-blue-600">{Math.floor(studyTime / 60)}m</div>
-                          <div className="text-xs text-blue-600/80">Time</div>
+                          <div className="text-lg font-bold text-blue-600">{Math.floor(sessionTime / 60)}m</div>
+                          <div className="text-xs text-blue-600/80">Session</div>
+                        </div>
+                        <div className="w-px h-8 bg-green-300 dark:bg-green-600" />
+                        <div className="text-center">
+                          <div className="text-lg font-bold text-purple-600">{Math.floor(studyTime / 60)}m</div>
+                          <div className="text-xs text-purple-600/80">Total</div>
                         </div>
                       </div>
                     )}
@@ -769,16 +868,16 @@ export default function StudyCompanion() {
                     </div>
                     <div className="grid grid-cols-3 gap-4 text-center">
                       <div className="p-3 rounded-lg bg-white/50 dark:bg-[#1a1a1a]/50 backdrop-blur-sm border border-white/20 dark:border-gray-800/20">
-                        <div className="text-lg font-bold text-gray-900 dark:text-white">{Math.floor(studyTime / 60)}:{(studyTime % 60).toString().padStart(2, '0')}</div>
+                        <div className="text-lg font-bold text-gray-900 dark:text-white">{Math.floor(sessionTime / 60)}:{(sessionTime % 60).toString().padStart(2, '0')}</div>
                         <div className="text-xs text-gray-600 dark:text-gray-400">Session Time</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-white/50 dark:bg-[#1a1a1a]/50 backdrop-blur-sm border border-white/20 dark:border-gray-800/20">
+                        <div className="text-lg font-bold text-gray-900 dark:text-white">{Math.floor(studyTime / 60)}:{(studyTime % 60).toString().padStart(2, '0')}</div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400">Total Time</div>
                       </div>
                       <div className="p-3 rounded-lg bg-white/50 dark:bg-[#1a1a1a]/50 backdrop-blur-sm border border-white/20 dark:border-gray-800/20">
                         <div className="text-lg font-bold text-gray-900 dark:text-white">{focusScore}%</div>
                         <div className="text-xs text-gray-600 dark:text-gray-400">Current Focus</div>
-                      </div>
-                      <div className="p-3 rounded-lg bg-white/50 dark:bg-[#1a1a1a]/50 backdrop-blur-sm border border-white/20 dark:border-gray-800/20">
-                        <div className="text-lg font-bold text-gray-900 dark:text-white capitalize">{attentionStatus}</div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400">Attention</div>
                       </div>
                     </div>
                     <div className="mt-3 flex items-center justify-between">
@@ -802,6 +901,13 @@ export default function StudyCompanion() {
 
           {/* Enhanced Sidebar */}
           <div className="space-y-6 animate-in fade-in-0 slide-in-from-right-8 duration-1000 delay-1000">
+
+            {/* Focus Chart Component */}
+            <FocusChart 
+              currentFocusScore={focusScore} 
+              isRecording={isRecording}
+              className="hover:shadow-lg transition-all duration-500 hover:scale-[1.02]"
+            />
 
             {/* AI Analysis Details */}
             <Card className="bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-lg transition-all duration-500 hover:scale-[1.02] group relative overflow-hidden">
@@ -1116,5 +1222,3 @@ export default function StudyCompanion() {
     </div>
   )
 }
-
-//Test

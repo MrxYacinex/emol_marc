@@ -4,8 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="26642eca-c0dd-4ff4-8e97-d59ea9cc7200" name="Changes" comment="">
+    <list default="true" id="26642eca-c0dd-4ff4-8e97-d59ea9cc7200" name="Changes" comment="test">
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Checkout_at_2025-08-06,_12_37_p_m__[Changes]/shelved.patch" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Checkout_at_2025-08-06,_12_43_p_m__[Changes]/shelved.patch" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Checkout_at_2025-08-06__12_37_p_m___Changes_.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Checkout_at_2025-08-06__12_43_p_m___Changes_.xml" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ai_model/combined.py" beforeDir="false" afterPath="$PROJECT_DIR$/ai_model/combined.py" afterDir="false" />
     </list>
     <list id="564cc30b-52b0-4847-8321-be0b12a11702" name="Changes by yacine" comment="" />
     <option name="SHOW_DIALOG" value="false" />
@@ -79,7 +85,7 @@
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
     "npm.Next.js: server-side.executor": "Run",
-    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "settings.editor.selected.configurable": "ml.llm.LLMConfigurable",
     "ts.external.directory.path": "/Users/marcprante/Projects/LearnPlat/emol_marc/node_modules/typescript/lib",
     "vue.rearranger.settings.migration": "true"
   }
@@ -182,8 +188,19 @@
       <workItem from="1754346773249" duration="13409000" />
       <workItem from="1754416301474" duration="5916000" />
       <workItem from="1754471849813" duration="8019000" />
-      <workItem from="1754480184016" duration="7772000" />
+      <workItem from="1754480184016" duration="11073000" />
+      <workItem from="1754576661445" duration="742000" />
+      <workItem from="1755118407777" duration="554000" />
     </task>
+    <task id="LOCAL-00001" summary="test">
+      <option name="closed" value="true" />
+      <created>1754488559665</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1754488559665</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -232,8 +249,12 @@
       </map>
     </option>
   </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="test" />
+    <option name="LAST_COMMIT_MESSAGE" value="test" />
+  </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/emol_marc$combined.coverage" NAME="combined Coverage Results" MODIFIED="1754486935375" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/ai_model" />
+    <SUITE FILE_PATH="coverage/emol_marc$combined.coverage" NAME="combined Coverage Results" MODIFIED="1754489232977" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/ai_model" />
     <SUITE FILE_PATH="coverage/emol_marc$main.coverage" NAME="main Coverage Results" MODIFIED="1754480352473" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/ai_model" />
   </component>
 </project>
